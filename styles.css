@@ -1,1 +1,90 @@
 /* Chess Journal Plugin Styles */
+
+.chess-journal-board {
+	width: 100%;
+	max-width: 400px;
+	aspect-ratio: 1;
+	margin: 1em 0;
+}
+
+.chess-journal-error {
+	color: var(--text-error);
+	padding: 1em;
+	border: 1px solid var(--text-error);
+	border-radius: 4px;
+	background: var(--background-modifier-error);
+}
+
+/* cm-chessboard base styles */
+.cm-chessboard .board.input-enabled .square {
+	cursor: pointer;
+}
+
+.cm-chessboard .coordinates,
+.cm-chessboard .markers-layer,
+.cm-chessboard .pieces-layer,
+.cm-chessboard .markers-top-layer {
+	pointer-events: none;
+}
+
+.cm-chessboard-accessibility.visually-hidden {
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+/* Chess Journal theme (based on default) */
+.cm-chessboard.chess-journal .board .square.white {
+	fill: #ecdab9;
+}
+
+.cm-chessboard.chess-journal .board .square.black {
+	fill: #c5a076;
+}
+
+.cm-chessboard.chess-journal.border-type-thin .board .border {
+	stroke: #c5a076;
+	stroke-width: 0.7%;
+	fill: #c5a076;
+}
+
+.cm-chessboard.chess-journal.border-type-none .board .border {
+	stroke: #c5a076;
+	stroke-width: 0;
+	fill: #c5a076;
+}
+
+.cm-chessboard.chess-journal.border-type-frame .board .border {
+	fill: #ecdab9;
+	stroke: none;
+}
+
+.cm-chessboard.chess-journal.border-type-frame .board .border-inner {
+	fill: #c5a076;
+	stroke: #c5a076;
+	stroke-width: 0.7%;
+}
+
+.cm-chessboard.chess-journal .coordinates {
+	pointer-events: none;
+	user-select: none;
+}
+
+.cm-chessboard.chess-journal .coordinates .coordinate {
+	fill: #b5936d;
+	font-size: 7px;
+	cursor: default;
+}
+
+.cm-chessboard.chess-journal .coordinates .coordinate.black {
+	fill: #eeddbf;
+}
+
+.cm-chessboard.chess-journal .coordinates .coordinate.white {
+	fill: #b5936d;
+}
