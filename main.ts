@@ -1,16 +1,37 @@
-import { Plugin } from "obsidian";
+import { Plugin, PluginSettingTab, App, Setting } from "obsidian";
 import { Chessboard } from "cm-chessboard";
 import { Chess } from "chess.js";
 // @ts-ignore - imported as text via esbuild loader
-import piecesSvg from "cm-chessboard/assets/pieces/staunty.svg";
+import stauntyPiecesSvg from "cm-chessboard/assets/pieces/staunty.svg";
+// @ts-ignore - imported as text via esbuild loader
+import standardPiecesSvg from "cm-chessboard/assets/pieces/standard.svg";
 
 const SPRITE_WRAPPER_ID = "chess-journal-sprite";
 
+type PieceSet = "standard" | "staunty";
+
+interface ChessJournalSettings {
+	pieceSet: PieceSet;
+}
+
+const DEFAULT_SETTINGS: ChessJournalSettings = {
+	pieceSet: "standard"
+};
+
+const PIECE_SETS: Record<PieceSet, string> = {
+	staunty: stauntyPiecesSvg,
+	standard: standardPiecesSvg
+};
+
 export default class ChessJournalPlugin extends Plugin {
 	private boards: Chessboard[] = [];
+	settings: ChessJournalSettings;
 
 	async onload() {
 		console.log("Loading Chess Journal plugin");
+
+		await this.loadSettings();
+		this.addSettingTab(new ChessJournalSettingTab(this.app, this));
 
 		// Inject the pieces SVG sprite into the document
 		this.injectPiecesSprite();
@@ -38,12 +59,12 @@ export default class ChessJournalPlugin extends Plugin {
 			const board = new Chessboard(container, {
 				position: fen,
 				assetsUrl: "",
-				assetsCache: true, // Use cached sprite from DOM
+				assetsCache: true,
 				style: {
 					cssClass: "chess-journal",
 					showCoordinates: true,
 					pieces: {
-						file: "pieces/staunty.svg" // Not actually used when cached
+						file: `pieces/${this.settings.pieceSet}.svg`
 					}
 				}
 			});
@@ -53,9 +74,10 @@ export default class ChessJournalPlugin extends Plugin {
 	}
 
 	injectPiecesSprite() {
-		// Check if already injected
-		if (document.getElementById(SPRITE_WRAPPER_ID)) {
-			return;
+		// Remove existing sprite if present (for reloading with new piece set)
+		const existing = document.getElementById(SPRITE_WRAPPER_ID);
+		if (existing) {
+			existing.remove();
 		}
 
 		// Create a hidden wrapper div and inject the SVG (bundled at build time)
@@ -66,9 +88,17 @@ export default class ChessJournalPlugin extends Plugin {
 		wrapper.style.height = "0";
 		wrapper.style.overflow = "hidden";
 		wrapper.setAttribute("aria-hidden", "true");
-		wrapper.innerHTML = piecesSvg;
+		wrapper.innerHTML = PIECE_SETS[this.settings.pieceSet];
 
 		document.body.appendChild(wrapper);
+	}
+
+	async loadSettings() {
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+	}
+
+	async saveSettings() {
+		await this.saveData(this.settings);
 	}
 
 	onunload() {
@@ -85,5 +115,32 @@ export default class ChessJournalPlugin extends Plugin {
 			board.destroy();
 		}
 		this.boards = [];
+	}
+}
+
+class ChessJournalSettingTab extends PluginSettingTab {
+	plugin: ChessJournalPlugin;
+
+	constructor(app: App, plugin: ChessJournalPlugin) {
+		super(app, plugin);
+		this.plugin = plugin;
+	}
+
+	display(): void {
+		const { containerEl } = this;
+		containerEl.empty();
+
+		new Setting(containerEl)
+			.setName("Piece set")
+			.setDesc("Choose which chess piece style to use")
+			.addDropdown(dropdown => dropdown
+				.addOption("standard", "Standard")
+				.addOption("staunty", "Staunty")
+				.setValue(this.plugin.settings.pieceSet)
+				.onChange(async (value: PieceSet) => {
+					this.plugin.settings.pieceSet = value;
+					await this.plugin.saveSettings();
+					this.plugin.injectPiecesSprite();
+				}));
 	}
 }
