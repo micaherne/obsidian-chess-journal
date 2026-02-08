@@ -190,3 +190,12 @@
 	padding-left: 0.5em;
 	border-left: 2px solid var(--background-modifier-border);
 }
+
+/* PGN file view */
+.chess-journal-pgn-text {
+	white-space: pre-wrap;
+	word-wrap: break-word;
+	padding: 1em;
+	font-family: var(--font-monospace);
+	font-size: var(--font-text-size);
+}

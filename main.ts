@@ -1,4 +1,4 @@
-import { Plugin, PluginSettingTab, App, Setting } from "obsidian";
+import { Plugin, PluginSettingTab, App, Setting, TextFileView, WorkspaceLeaf } from "obsidian";
 import { Chessboard } from "cm-chessboard";
 import { Chess, Move } from "chess.js";
 // @ts-ignore - imported as text via esbuild loader
@@ -198,6 +198,25 @@ class PgnViewer {
 	}
 }
 
+const VIEW_TYPE_PGN = "pgn-file-view";
+
+class PgnFileView extends TextFileView {
+	getViewType() { return VIEW_TYPE_PGN; }
+	getDisplayText() { return this.file?.basename || "PGN"; }
+
+	setViewData(data: string, clear: boolean) {
+		this.contentEl.empty();
+		this.contentEl.createEl("pre", {
+			cls: "chess-journal-pgn-text",
+			text: data,
+		});
+	}
+
+	getViewData() { return this.data; }
+
+	clear() { this.contentEl.empty(); }
+}
+
 export default class ChessJournalPlugin extends Plugin {
 	private boards: Chessboard[] = [];
 	private pgnViewers: PgnViewer[] = [];
@@ -263,6 +282,10 @@ export default class ChessJournalPlugin extends Plugin {
 				});
 			}
 		});
+
+		// PGN file format support
+		this.registerView(VIEW_TYPE_PGN, (leaf) => new PgnFileView(leaf));
+		this.registerExtensions(["pgn"], VIEW_TYPE_PGN);
 	}
 
 	injectPiecesSprite() {
