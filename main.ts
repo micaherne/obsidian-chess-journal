@@ -1,12 +1,13 @@
 import { Plugin, PluginSettingTab, App, Setting } from "obsidian";
 import { Chessboard } from "cm-chessboard";
-import { Chess } from "chess.js";
+import { Chess, Move } from "chess.js";
 // @ts-ignore - imported as text via esbuild loader
 import stauntyPiecesSvg from "cm-chessboard/assets/pieces/staunty.svg";
 // @ts-ignore - imported as text via esbuild loader
 import standardPiecesSvg from "cm-chessboard/assets/pieces/standard.svg";
 
 const SPRITE_WRAPPER_ID = "chess-journal-sprite";
+const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 type PieceSet = "standard" | "staunty";
 
@@ -23,8 +24,135 @@ const PIECE_SETS: Record<PieceSet, string> = {
 	standard: standardPiecesSvg
 };
 
+class PgnViewer {
+	private board: Chessboard;
+	private moves: Move[];
+	private currentMoveIndex: number = -1; // -1 = starting position
+	private moveElements: HTMLElement[] = [];
+
+	constructor(
+		container: HTMLElement,
+		pgn: string,
+		pieceSet: PieceSet
+	) {
+		// Parse the PGN
+		const chess = new Chess();
+		chess.loadPgn(pgn);
+		this.moves = chess.history({ verbose: true });
+
+		// Create layout
+		const wrapper = container.createEl("div", { cls: "chess-journal-pgn-viewer" });
+
+		// Board container
+		const boardContainer = wrapper.createEl("div", { cls: "chess-journal-board" });
+
+		// Controls
+		const controls = wrapper.createEl("div", { cls: "chess-journal-controls" });
+
+		const startBtn = controls.createEl("button", { text: "«", cls: "chess-journal-btn" });
+		const prevBtn = controls.createEl("button", { text: "‹", cls: "chess-journal-btn" });
+		const nextBtn = controls.createEl("button", { text: "›", cls: "chess-journal-btn" });
+		const endBtn = controls.createEl("button", { text: "»", cls: "chess-journal-btn" });
+
+		startBtn.addEventListener("click", () => this.goToStart());
+		prevBtn.addEventListener("click", () => this.goToPrev());
+		nextBtn.addEventListener("click", () => this.goToNext());
+		endBtn.addEventListener("click", () => this.goToEnd());
+
+		// Moves panel
+		const movesPanel = wrapper.createEl("div", { cls: "chess-journal-moves" });
+		this.renderMoves(movesPanel);
+
+		// Create the chessboard
+		this.board = new Chessboard(boardContainer, {
+			position: START_FEN,
+			assetsUrl: "",
+			assetsCache: true,
+			style: {
+				cssClass: "chess-journal",
+				showCoordinates: true,
+				pieces: {
+					file: `pieces/${pieceSet}.svg`
+				}
+			}
+		});
+	}
+
+	private renderMoves(container: HTMLElement) {
+		this.moveElements = [];
+
+		for (let i = 0; i < this.moves.length; i++) {
+			const move = this.moves[i];
+
+			// Add move number before white's move
+			if (move.color === "w") {
+				const moveNum = Math.floor(i / 2) + 1;
+				container.createEl("span", {
+					text: `${moveNum}.`,
+					cls: "chess-journal-move-number"
+				});
+			}
+
+			const moveEl = container.createEl("span", {
+				text: move.san,
+				cls: "chess-journal-move"
+			});
+
+			moveEl.addEventListener("click", () => this.goToMove(i));
+			this.moveElements.push(moveEl);
+		}
+	}
+
+	private updateBoard() {
+		const fen = this.currentMoveIndex < 0
+			? START_FEN
+			: this.moves[this.currentMoveIndex].after;
+
+		this.board.setPosition(fen, true);
+
+		// Update active move highlighting
+		this.moveElements.forEach((el, i) => {
+			el.classList.toggle("active", i === this.currentMoveIndex);
+		});
+	}
+
+	goToStart() {
+		this.currentMoveIndex = -1;
+		this.updateBoard();
+	}
+
+	goToEnd() {
+		this.currentMoveIndex = this.moves.length - 1;
+		this.updateBoard();
+	}
+
+	goToPrev() {
+		if (this.currentMoveIndex >= 0) {
+			this.currentMoveIndex--;
+			this.updateBoard();
+		}
+	}
+
+	goToNext() {
+		if (this.currentMoveIndex < this.moves.length - 1) {
+			this.currentMoveIndex++;
+			this.updateBoard();
+		}
+	}
+
+	goToMove(index: number) {
+		this.currentMoveIndex = index;
+		this.updateBoard();
+	}
+
+	destroy() {
+		this.board.destroy();
+	}
+}
+
 export default class ChessJournalPlugin extends Plugin {
 	private boards: Chessboard[] = [];
+	private pgnViewers: PgnViewer[] = [];
 	settings: ChessJournalSettings;
 
 	async onload() {
@@ -36,6 +164,7 @@ export default class ChessJournalPlugin extends Plugin {
 		// Inject the pieces SVG sprite into the document
 		this.injectPiecesSprite();
 
+		// FEN code block processor
 		this.registerMarkdownCodeBlockProcessor("fen", (source, el, ctx) => {
 			const fen = source.trim();
 
@@ -70,6 +199,21 @@ export default class ChessJournalPlugin extends Plugin {
 			});
 
 			this.boards.push(board);
+		});
+
+		// PGN code block processor
+		this.registerMarkdownCodeBlockProcessor("pgn", (source, el, ctx) => {
+			const pgn = source.trim();
+
+			try {
+				const viewer = new PgnViewer(el, pgn, this.settings.pieceSet);
+				this.pgnViewers.push(viewer);
+			} catch (e) {
+				el.createEl("div", {
+					text: `Invalid PGN: ${e.message}`,
+					cls: "chess-journal-error"
+				});
+			}
 		});
 	}
 
@@ -115,6 +259,12 @@ export default class ChessJournalPlugin extends Plugin {
 			board.destroy();
 		}
 		this.boards = [];
+
+		// Clean up PGN viewers
+		for (const viewer of this.pgnViewers) {
+			viewer.destroy();
+		}
+		this.pgnViewers = [];
 	}
 }
 

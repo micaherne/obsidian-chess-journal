@@ -88,3 +88,77 @@
 .cm-chessboard.chess-journal .coordinates .coordinate.white {
 	fill: #b5936d;
 }
+
+/* PGN Viewer */
+.chess-journal-pgn-viewer {
+	display: flex;
+	flex-direction: column;
+	max-width: 400px;
+	gap: 0.5em;
+	margin: 1em 0;
+}
+
+.chess-journal-pgn-viewer .chess-journal-board {
+	margin: 0;
+}
+
+.chess-journal-controls {
+	display: flex;
+	gap: 0.25em;
+}
+
+.chess-journal-btn {
+	flex: 1;
+	padding: 0.4em;
+	font-size: 1.4em;
+	font-weight: bold;
+	cursor: pointer;
+	background: var(--interactive-normal);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	color: var(--text-normal);
+	line-height: 1;
+}
+
+.chess-journal-btn:hover {
+	background: var(--interactive-hover);
+}
+
+.chess-journal-btn:active {
+	background: var(--interactive-accent);
+}
+
+.chess-journal-moves {
+	max-height: 150px;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding: 0.5em;
+	background: var(--background-secondary);
+	border-radius: 4px;
+	line-height: 1.8;
+	word-wrap: break-word;
+}
+
+.chess-journal-move-number {
+	color: var(--text-muted);
+	margin-right: 0.2em;
+	white-space: nowrap;
+}
+
+.chess-journal-move {
+	cursor: pointer;
+	padding: 0.1em 0.3em;
+	border-radius: 3px;
+	margin-right: 0.4em;
+	white-space: nowrap;
+	display: inline-block;
+}
+
+.chess-journal-move:hover {
+	background: var(--background-modifier-hover);
+}
+
+.chess-journal-move.active {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
