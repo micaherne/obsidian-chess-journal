@@ -27,6 +27,7 @@ const PIECE_SETS: Record<PieceSet, string> = {
 class PgnViewer {
 	private board: Chessboard;
 	private moves: Move[];
+	private result: string;
 	private currentMoveIndex: number = -1; // -1 = starting position
 	private moveElements: HTMLElement[] = [];
 
@@ -40,8 +41,23 @@ class PgnViewer {
 		chess.loadPgn(pgn);
 		this.moves = chess.history({ verbose: true });
 
+		// Get headers
+		const headers = chess.header();
+		const white = headers["White"] || "?";
+		const black = headers["Black"] || "?";
+		const date = headers["Date"] || "";
+		this.result = headers["Result"] || "*";
+
 		// Create layout
 		const wrapper = container.createEl("div", { cls: "chess-journal-pgn-viewer" });
+
+		// Title
+		const title = wrapper.createEl("div", { cls: "chess-journal-title" });
+		const players = `${white} vs ${black}`;
+		title.createEl("span", { text: players, cls: "chess-journal-players" });
+		if (date && date !== "????.??.??") {
+			title.createEl("span", { text: ` (${date})`, cls: "chess-journal-date" });
+		}
 
 		// Board container
 		const boardContainer = wrapper.createEl("div", { cls: "chess-journal-board" });
@@ -100,6 +116,14 @@ class PgnViewer {
 
 			moveEl.addEventListener("click", () => this.goToMove(i));
 			this.moveElements.push(moveEl);
+		}
+
+		// Add result
+		if (this.result && this.result !== "*") {
+			container.createEl("span", {
+				text: this.result,
+				cls: "chess-journal-result"
+			});
 		}
 	}
 

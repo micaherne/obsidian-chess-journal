@@ -162,3 +162,22 @@
 	background: var(--interactive-accent);
 	color: var(--text-on-accent);
 }
+
+.chess-journal-title {
+	font-size: 0.9em;
+	color: var(--text-muted);
+}
+
+.chess-journal-players {
+	font-weight: 500;
+	color: var(--text-normal);
+}
+
+.chess-journal-date {
+	color: var(--text-muted);
+}
+
+.chess-journal-result {
+	font-weight: bold;
+	margin-left: 0.5em;
+}
