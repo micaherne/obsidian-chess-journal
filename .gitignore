@@ -2,6 +2,9 @@
 main.js
 *.js.map
 
+# Runtime data
+data.json
+
 # npm
 node_modules
 
