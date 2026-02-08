@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf } from "obsidian";
+import { ItemView, ViewStateResult, WorkspaceLeaf } from "obsidian";
 import { GameProvider, GameEntry, createProvider } from "./GameProvider";
 import { VIEW_TYPE_GAME } from "./GameView";
 import { ChessJournalSettings, ExternalSource } from "./settings";
@@ -17,6 +17,7 @@ export class DatabaseView extends ItemView {
 	private searchQuery: string = "";
 	private searchTimeout: number | null = null;
 
+	private selectEl: HTMLSelectElement;
 	private listEl: HTMLElement;
 	private statusEl: HTMLElement;
 	private loadMoreEl: HTMLButtonElement;
@@ -38,6 +39,22 @@ export class DatabaseView extends ItemView {
 		return "database";
 	}
 
+	getState(): Record<string, unknown> {
+		return {
+			sourcePath: this.currentSource?.path ?? "",
+		};
+	}
+
+	async setState(state: unknown, result: ViewStateResult): Promise<void> {
+		const s = state as Record<string, unknown>;
+		const path = typeof s?.sourcePath === "string" ? s.sourcePath : "";
+		if (path && this.selectEl) {
+			this.selectEl.value = path;
+			await this.onSourceChange(path);
+		}
+		await super.setState(state, result);
+	}
+
 	async onOpen(): Promise<void> {
 		const container = this.contentEl;
 		container.empty();
@@ -45,18 +62,18 @@ export class DatabaseView extends ItemView {
 
 		// Source selector row
 		const selectorRow = container.createDiv("chess-journal-db-selector-row");
-		const select = selectorRow.createEl("select", { cls: "chess-journal-db-source-select" });
+		this.selectEl = selectorRow.createEl("select", { cls: "chess-journal-db-source-select" });
 
-		const defaultOption = select.createEl("option", { text: "Select a source..." });
+		const defaultOption = this.selectEl.createEl("option", { text: "Select a source..." });
 		defaultOption.value = "";
 
 		for (const source of this.settings.externalSources) {
 			const basename = source.path.split(/[/\\]/).pop() || source.path;
-			const option = select.createEl("option", { text: basename });
+			const option = this.selectEl.createEl("option", { text: basename });
 			option.value = source.path;
 		}
 
-		select.addEventListener("change", () => this.onSourceChange(select.value));
+		this.selectEl.addEventListener("change", () => this.onSourceChange(this.selectEl.value));
 
 		// Search box
 		const searchInput = container.createEl("input", {
