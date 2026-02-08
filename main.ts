@@ -27,6 +27,7 @@ const PIECE_SETS: Record<PieceSet, string> = {
 class PgnViewer {
 	private board: Chessboard;
 	private moves: Move[];
+	private comments: Map<string, string>;
 	private result: string;
 	private currentMoveIndex: number = -1; // -1 = starting position
 	private moveElements: HTMLElement[] = [];
@@ -41,6 +42,12 @@ class PgnViewer {
 		const chess = new Chess();
 		chess.loadPgn(pgn);
 		this.moves = chess.history({ verbose: true });
+
+		// Get comments as a map from FEN to comment
+		this.comments = new Map();
+		for (const { fen, comment } of chess.getComments()) {
+			this.comments.set(fen, comment);
+		}
 
 		// Get headers
 		const headers = chess.header();
@@ -117,6 +124,15 @@ class PgnViewer {
 
 			moveEl.addEventListener("click", () => this.goToMove(i));
 			this.moveElements.push(moveEl);
+
+			// Add comment if present for this position
+			const comment = this.comments.get(move.after);
+			if (comment) {
+				container.createEl("span", {
+					text: comment,
+					cls: "chess-journal-comment"
+				});
+			}
 		}
 
 		// Add result
