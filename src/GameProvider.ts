@@ -1,5 +1,6 @@
 import { ExternalSourceType } from "./settings";
 import { PgnProvider } from "./PgnProvider";
+import { ScidProvider } from "./ScidProvider";
 
 export interface GameHeaders {
 	[key: string]: string;
@@ -28,6 +29,8 @@ export function createProvider(type: ExternalSourceType): GameProvider {
 	switch (type) {
 		case "pgn":
 			return new PgnProvider();
+		case "scid":
+			return new ScidProvider();
 		default:
 			throw new Error(`Unsupported source type: ${type}`);
 	}
