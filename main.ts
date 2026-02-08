@@ -30,6 +30,7 @@ class PgnViewer {
 	private result: string;
 	private currentMoveIndex: number = -1; // -1 = starting position
 	private moveElements: HTMLElement[] = [];
+	private movesPanel: HTMLElement;
 
 	constructor(
 		container: HTMLElement,
@@ -76,8 +77,8 @@ class PgnViewer {
 		endBtn.addEventListener("click", () => this.goToEnd());
 
 		// Moves panel
-		const movesPanel = wrapper.createEl("div", { cls: "chess-journal-moves" });
-		this.renderMoves(movesPanel);
+		this.movesPanel = wrapper.createEl("div", { cls: "chess-journal-moves" });
+		this.renderMoves(this.movesPanel);
 
 		// Create the chessboard
 		this.board = new Chessboard(boardContainer, {
@@ -138,6 +139,13 @@ class PgnViewer {
 		this.moveElements.forEach((el, i) => {
 			el.classList.toggle("active", i === this.currentMoveIndex);
 		});
+
+		// Scroll active move into view
+		if (this.currentMoveIndex >= 0 && this.moveElements[this.currentMoveIndex]) {
+			this.moveElements[this.currentMoveIndex].scrollIntoView({ block: "nearest" });
+		} else if (this.currentMoveIndex < 0) {
+			this.movesPanel.scrollTop = 0;
+		}
 	}
 
 	goToStart() {
