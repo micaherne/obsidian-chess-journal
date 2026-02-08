@@ -1,0 +1,10 @@
+{
+	"id": "obsidian-chess-journal",
+	"name": "Chess Journal",
+	"version": "0.0.1",
+	"minAppVersion": "1.0.0",
+	"description": "A chess journaling plugin for Obsidian.",
+	"author": "Michael",
+	"authorUrl": "",
+	"isDesktopOnly": false
+}
