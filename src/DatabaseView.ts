@@ -17,6 +17,9 @@ export class DatabaseView extends ItemView {
 	private searchQuery: string = "";
 	private searchTimeout: number | null = null;
 
+	private selectedIndex: number = -1;
+	private rowElements: Map<number, HTMLElement> = new Map();
+
 	private selectEl: HTMLSelectElement;
 	private listEl: HTMLElement;
 	private statusEl: HTMLElement;
@@ -146,6 +149,8 @@ export class DatabaseView extends ItemView {
 	private resetList(): void {
 		this.displayedGames = [];
 		this.listEl.empty();
+		this.rowElements.clear();
+		this.selectedIndex = -1;
 		this.totalCount = 0;
 		this.loadMoreEl.style.display = "none";
 	}
@@ -179,6 +184,11 @@ export class DatabaseView extends ItemView {
 
 	private renderGameRow(entry: GameEntry): void {
 		const row = this.listEl.createDiv("chess-journal-db-row");
+		this.rowElements.set(entry.index, row);
+
+		if (entry.index === this.selectedIndex) {
+			row.addClass("is-selected");
+		}
 
 		const white = entry.headers["White"] || "?";
 		const black = entry.headers["Black"] || "?";
@@ -204,6 +214,13 @@ export class DatabaseView extends ItemView {
 
 		const pgn = this.provider.getGamePgn(entry.index);
 		if (!pgn) return;
+
+		// Update selection highlight
+		const prevRow = this.rowElements.get(this.selectedIndex);
+		if (prevRow) prevRow.removeClass("is-selected");
+		this.selectedIndex = entry.index;
+		const newRow = this.rowElements.get(entry.index);
+		if (newRow) newRow.addClass("is-selected");
 
 		const white = entry.headers["White"] || "?";
 		const black = entry.headers["Black"] || "?";

@@ -258,7 +258,7 @@
 	background: var(--background-modifier-hover);
 }
 
-.chess-journal-db-row:active {
+.chess-journal-db-row.is-selected {
 	background: var(--interactive-accent);
 	color: var(--text-on-accent);
 }
@@ -269,7 +269,7 @@
 	color: var(--text-normal);
 }
 
-.chess-journal-db-row:active .chess-journal-db-row-players {
+.chess-journal-db-row.is-selected .chess-journal-db-row-players {
 	color: var(--text-on-accent);
 }
 
@@ -278,7 +278,7 @@
 	color: var(--text-muted);
 }
 
-.chess-journal-db-row:active .chess-journal-db-row-info {
+.chess-journal-db-row.is-selected .chess-journal-db-row-info {
 	color: var(--text-on-accent);
 }
 
