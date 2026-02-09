@@ -1,7 +1,8 @@
-import { ItemView, ViewStateResult, WorkspaceLeaf } from "obsidian";
+import { ItemView, ViewStateResult, WorkspaceLeaf, setIcon } from "obsidian";
 import { GameProvider, GameEntry, createProvider } from "./GameProvider";
 import { VIEW_TYPE_GAME } from "./GameView";
-import { ChessJournalSettings, ExternalSource } from "./settings";
+import { ChessJournalSettings, ExternalSource, sourceKey, sourceDisplayName } from "./settings";
+import { ChessComProvider } from "./ChessComProvider";
 
 export const VIEW_TYPE_DATABASE = "chess-journal-database-view";
 
@@ -16,11 +17,16 @@ export class DatabaseView extends ItemView {
 	private totalCount: number = 0;
 	private searchQuery: string = "";
 	private searchTimeout: number | null = null;
+	private sortDesc: boolean = false;
+	private sortActionEl: HTMLElement | null = null;
 
 	private selectedIndex: number = -1;
 	private rowElements: Map<number, HTMLElement> = new Map();
 
 	private selectEl: HTMLSelectElement;
+	private filterRow: HTMLElement;
+	private usernameSelectEl: HTMLSelectElement;
+	private loadingEl: HTMLElement;
 	private listEl: HTMLElement;
 	private statusEl: HTMLElement;
 	private loadMoreEl: HTMLButtonElement;
@@ -44,16 +50,27 @@ export class DatabaseView extends ItemView {
 
 	getState(): Record<string, unknown> {
 		return {
-			sourcePath: this.currentSource?.path ?? "",
+			sourceKey: this.currentSource ? sourceKey(this.currentSource) : "",
+			// Backward compat: also write sourcePath for older versions
+			sourcePath: this.currentSource && this.currentSource.type !== "chesscom"
+				? this.currentSource.path : "",
+			sortDesc: this.sortDesc,
 		};
 	}
 
 	async setState(state: unknown, result: ViewStateResult): Promise<void> {
 		const s = state as Record<string, unknown>;
-		const path = typeof s?.sourcePath === "string" ? s.sourcePath : "";
-		if (path && this.selectEl) {
-			this.selectEl.value = path;
-			await this.onSourceChange(path);
+		if (typeof s?.sortDesc === "boolean") {
+			this.sortDesc = s.sortDesc;
+			this.updateSortAction();
+		}
+		// Try sourceKey first, fall back to sourcePath for backward compat
+		const key = typeof s?.sourceKey === "string" ? s.sourceKey
+			: typeof s?.sourcePath === "string" ? s.sourcePath
+			: "";
+		if (key && this.selectEl) {
+			this.selectEl.value = key;
+			await this.onSourceChange(key);
 		}
 		await super.setState(state, result);
 	}
@@ -71,15 +88,21 @@ export class DatabaseView extends ItemView {
 		defaultOption.value = "";
 
 		for (const source of this.settings.externalSources) {
-			const basename = source.path.split(/[/\\]/).pop() || source.path;
-			const option = this.selectEl.createEl("option", { text: basename });
-			option.value = source.path;
+			const option = this.selectEl.createEl("option", { text: sourceDisplayName(source) });
+			option.value = sourceKey(source);
 		}
 
 		this.selectEl.addEventListener("change", () => this.onSourceChange(this.selectEl.value));
 
-		// Search box
-		const searchInput = container.createEl("input", {
+		// Username filter row (hidden by default)
+		this.filterRow = container.createDiv("chess-journal-db-filter-row");
+		this.filterRow.style.display = "none";
+		this.usernameSelectEl = this.filterRow.createEl("select", { cls: "chess-journal-db-username-select" });
+		this.usernameSelectEl.addEventListener("change", () => this.onUsernameFilterChange());
+
+		// Search row: input + sort toggle
+		const searchRow = container.createDiv("chess-journal-db-search-row");
+		const searchInput = searchRow.createEl("input", {
 			type: "text",
 			placeholder: "Search games...",
 			cls: "chess-journal-db-search",
@@ -94,6 +117,18 @@ export class DatabaseView extends ItemView {
 				this.loadPage();
 			}, DEBOUNCE_MS);
 		});
+
+		this.sortActionEl = searchRow.createEl("button", {
+			cls: "chess-journal-db-sort-btn clickable-icon",
+			attr: { "aria-label": this.sortDesc ? "Sort: newest first" : "Sort: oldest first" },
+		});
+		setIcon(this.sortActionEl, this.sortDesc ? "sort-desc" : "sort-asc");
+		this.sortActionEl.addEventListener("click", () => this.toggleSort());
+
+		// Loading indicator
+		this.loadingEl = container.createDiv("chess-journal-db-loading");
+		this.loadingEl.setText("Loading games...");
+		this.loadingEl.style.display = "none";
 
 		// Game list
 		this.listEl = container.createDiv("chess-journal-db-list");
@@ -120,30 +155,91 @@ export class DatabaseView extends ItemView {
 		}
 	}
 
-	private async onSourceChange(path: string): Promise<void> {
+	private async onSourceChange(key: string): Promise<void> {
 		if (this.provider) {
 			this.provider.close();
 			this.provider = null;
 		}
 		this.currentSource = null;
 		this.resetList();
+		this.hideUsernameFilter();
 		this.updateStatus();
 
-		if (!path) return;
+		if (!key) return;
 
-		const source = this.settings.externalSources.find(s => s.path === path);
+		const source = this.settings.externalSources.find(s => sourceKey(s) === key);
 		if (!source) return;
 
 		try {
-			this.provider = createProvider(source.type);
-			await this.provider.open(source.path);
+			this.loadingEl.style.display = "";
+			this.provider = createProvider(source);
+			await this.provider.open();
 			this.currentSource = source;
+			this.loadingEl.style.display = "none";
 			this.totalCount = this.provider.getGameCount();
+			this.showUsernameFilter();
 			this.updateStatus();
 			this.loadPage();
 		} catch (e) {
+			this.loadingEl.style.display = "none";
 			this.statusEl.setText(`Error opening source: ${e.message}`);
 		}
+	}
+
+	private showUsernameFilter(): void {
+		if (!(this.provider instanceof ChessComProvider)) {
+			this.hideUsernameFilter();
+			return;
+		}
+
+		const usernames = this.provider.getUsernames();
+		if (usernames.length <= 1) {
+			this.hideUsernameFilter();
+			return;
+		}
+
+		this.usernameSelectEl.empty();
+		const allOption = this.usernameSelectEl.createEl("option", { text: "All users" });
+		allOption.value = "";
+		for (const u of usernames) {
+			const opt = this.usernameSelectEl.createEl("option", { text: u });
+			opt.value = u;
+		}
+		this.filterRow.style.display = "";
+	}
+
+	private hideUsernameFilter(): void {
+		this.filterRow.style.display = "none";
+		this.usernameSelectEl.empty();
+	}
+
+	private onUsernameFilterChange(): void {
+		if (!(this.provider instanceof ChessComProvider)) return;
+		const value = this.usernameSelectEl.value || null;
+		this.provider.setUsernameFilter(value);
+		this.resetList();
+		this.totalCount = this.provider.getGameCount();
+		this.updateStatus();
+		this.loadPage();
+	}
+
+	private toggleSort(): void {
+		this.sortDesc = !this.sortDesc;
+		this.updateSortAction();
+		this.resetList();
+		if (this.provider) {
+			this.totalCount = this.provider.getGameCount();
+		}
+		this.loadPage();
+		this.app.workspace.requestSaveLayout();
+	}
+
+	private updateSortAction(): void {
+		if (!this.sortActionEl) return;
+		const icon = this.sortDesc ? "sort-desc" : "sort-asc";
+		const label = this.sortDesc ? "Sort: newest first" : "Sort: oldest first";
+		this.sortActionEl.setAttribute("aria-label", label);
+		setIcon(this.sortActionEl, icon);
 	}
 
 	private resetList(): void {
@@ -158,16 +254,35 @@ export class DatabaseView extends ItemView {
 	private loadPage(): void {
 		if (!this.provider) return;
 
-		const offset = this.displayedGames.length;
+		const displayed = this.displayedGames.length;
 		let entries: GameEntry[];
 
 		if (this.searchQuery) {
-			const result = this.provider.search(this.searchQuery, offset, PAGE_SIZE);
-			entries = result.games;
-			this.totalCount = result.total;
+			if (this.sortDesc && displayed === 0) {
+				// Probe to get the total count for reverse pagination
+				const probe = this.provider.search(this.searchQuery, 0, 0);
+				this.totalCount = probe.total;
+			}
+			if (this.sortDesc) {
+				const reverseOffset = Math.max(0, this.totalCount - displayed - PAGE_SIZE);
+				const limit = Math.min(PAGE_SIZE, this.totalCount - displayed);
+				const result = this.provider.search(this.searchQuery, reverseOffset, limit);
+				entries = result.games.reverse();
+				this.totalCount = result.total;
+			} else {
+				const result = this.provider.search(this.searchQuery, displayed, PAGE_SIZE);
+				entries = result.games;
+				this.totalCount = result.total;
+			}
 		} else {
-			entries = this.provider.getGames(offset, PAGE_SIZE);
 			this.totalCount = this.provider.getGameCount();
+			if (this.sortDesc) {
+				const reverseOffset = Math.max(0, this.totalCount - displayed - PAGE_SIZE);
+				const limit = Math.min(PAGE_SIZE, this.totalCount - displayed);
+				entries = this.provider.getGames(reverseOffset, limit).reverse();
+			} else {
+				entries = this.provider.getGames(displayed, PAGE_SIZE);
+			}
 		}
 
 		for (const entry of entries) {

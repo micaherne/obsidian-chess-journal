@@ -1,6 +1,7 @@
-import { ExternalSourceType } from "./settings";
+import { ExternalSource } from "./settings";
 import { PgnProvider } from "./PgnProvider";
 import { ScidProvider } from "./ScidProvider";
+import { ChessComProvider } from "./ChessComProvider";
 
 export interface GameHeaders {
 	[key: string]: string;
@@ -17,7 +18,7 @@ export interface GameSearchResult {
 }
 
 export interface GameProvider {
-	open(path: string): Promise<void>;
+	open(): Promise<void>;
 	close(): void;
 	getGameCount(): number;
 	getGames(offset: number, limit: number): GameEntry[];
@@ -25,13 +26,15 @@ export interface GameProvider {
 	search(query: string, offset: number, limit: number): GameSearchResult;
 }
 
-export function createProvider(type: ExternalSourceType): GameProvider {
-	switch (type) {
+export function createProvider(source: ExternalSource): GameProvider {
+	switch (source.type) {
 		case "pgn":
-			return new PgnProvider();
+			return new PgnProvider(source.path);
 		case "scid":
-			return new ScidProvider();
+			return new ScidProvider(source.path);
+		case "chesscom":
+			return new ChessComProvider(source.usernames);
 		default:
-			throw new Error(`Unsupported source type: ${type}`);
+			throw new Error(`Unsupported source type: ${(source as any).type}`);
 	}
 }

@@ -3,10 +3,15 @@ import { GameProvider, GameHeaders, GameEntry, GameSearchResult } from "./GamePr
 import { ScidDatabase, ScidGameHeaders, ScidMove } from "./scid/index";
 
 export class ScidProvider implements GameProvider {
+	private path: string;
 	private db = new ScidDatabase();
 
-	async open(path: string): Promise<void> {
-		this.db.open(path);
+	constructor(path: string) {
+		this.path = path;
+	}
+
+	async open(): Promise<void> {
+		this.db.open(this.path);
 	}
 
 	close(): void {

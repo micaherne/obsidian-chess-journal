@@ -223,9 +223,16 @@
 	font-size: var(--font-ui-small);
 }
 
-.chess-journal-db-search {
+.chess-journal-db-search-row {
 	flex-shrink: 0;
-	width: 100%;
+	display: flex;
+	gap: 0.4em;
+	align-items: center;
+}
+
+.chess-journal-db-search {
+	flex: 1;
+	min-width: 0;
 	padding: 0.4em 0.6em;
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 4px;
@@ -236,6 +243,19 @@
 
 .chess-journal-db-search::placeholder {
 	color: var(--text-faint);
+}
+
+.chess-journal-db-sort-btn {
+	flex-shrink: 0;
+	color: var(--text-muted);
+}
+
+.chess-journal-db-loading {
+	flex-shrink: 0;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	text-align: center;
+	padding: 0.5em 0;
 }
 
 .chess-journal-db-list {

@@ -8,11 +8,17 @@ interface GameIndex {
 }
 
 export class PgnProvider implements GameProvider {
+	private path: string;
 	private fileContent: string = "";
 	private games: GameIndex[] = [];
 
-	async open(path: string): Promise<void> {
-		const raw = fs.readFileSync(path, "utf-8");
+	constructor(path: string = "") {
+		this.path = path;
+	}
+
+	async open(): Promise<void> {
+		if (!this.path) return;
+		const raw = fs.readFileSync(this.path, "utf-8");
 		this.loadContent(raw);
 	}
 
