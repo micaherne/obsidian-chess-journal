@@ -93,7 +93,7 @@ export default class ChessJournalPlugin extends Plugin {
 		this.registerView(VIEW_TYPE_DATABASE, (leaf) => new DatabaseView(leaf, this.settings));
 
 		// Game viewer (for games opened from database)
-		this.registerView(VIEW_TYPE_GAME, (leaf) => new GameView(leaf, this.settings.pieceSet));
+		this.registerView(VIEW_TYPE_GAME, (leaf) => new GameView(leaf, this.settings));
 
 		// Command to open the database panel
 		this.addCommand({

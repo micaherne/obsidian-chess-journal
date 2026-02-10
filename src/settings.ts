@@ -55,11 +55,13 @@ export function sourceDisplayName(source: ExternalSource): string {
 export interface ChessJournalSettings {
 	pieceSet: PieceSet;
 	externalSources: ExternalSource[];
+	notesFolder: string;
 }
 
 export const DEFAULT_SETTINGS: ChessJournalSettings = {
 	pieceSet: "standard",
 	externalSources: [],
+	notesFolder: "",
 };
 
 export interface ChessJournalPluginInterface {
@@ -91,6 +93,17 @@ export class ChessJournalSettingTab extends PluginSettingTab {
 					this.plugin.settings.pieceSet = value as PieceSet;
 					await this.plugin.saveSettings();
 					this.plugin.injectPiecesSprite();
+				}));
+
+		new Setting(containerEl)
+			.setName("Notes folder")
+			.setDesc("Folder for game notes created from the database (blank = vault root)")
+			.addText(text => text
+				.setPlaceholder("e.g. Games")
+				.setValue(this.plugin.settings.notesFolder)
+				.onChange(async (value: string) => {
+					this.plugin.settings.notesFolder = value.trim();
+					await this.plugin.saveSettings();
 				}));
 
 		containerEl.createEl("h3", { text: "External sources" });
