@@ -69,6 +69,18 @@ export class PgnProvider implements GameProvider {
 		};
 	}
 
+	/** Sort games by Date header (YYYY.MM.DD). Returns permutation: perm[newIndex] = oldIndex. */
+	sortByDate(): number[] {
+		const indices = this.games.map((_, i) => i);
+		indices.sort((a, b) => {
+			const dateA = this.games[a].headers.Date ?? "";
+			const dateB = this.games[b].headers.Date ?? "";
+			return dateA.localeCompare(dateB);
+		});
+		this.games = indices.map(i => this.games[i]);
+		return indices;
+	}
+
 	private indexGames(): void {
 		this.games = [];
 		const chunks = this.fileContent.split(/\n\n(?=\[)/);

@@ -120,7 +120,7 @@ export class DatabaseView extends ItemView {
 
 		this.sortActionEl = searchRow.createEl("button", {
 			cls: "chess-journal-db-sort-btn clickable-icon",
-			attr: { "aria-label": this.sortDesc ? "Sort: newest first" : "Sort: oldest first" },
+			attr: { "aria-label": this.sortDesc ? "Date: newest first" : "Date: oldest first" },
 		});
 		setIcon(this.sortActionEl, this.sortDesc ? "sort-desc" : "sort-asc");
 		this.sortActionEl.addEventListener("click", () => this.toggleSort());
@@ -237,7 +237,7 @@ export class DatabaseView extends ItemView {
 	private updateSortAction(): void {
 		if (!this.sortActionEl) return;
 		const icon = this.sortDesc ? "sort-desc" : "sort-asc";
-		const label = this.sortDesc ? "Sort: newest first" : "Sort: oldest first";
+		const label = this.sortDesc ? "Date: newest first" : "Date: oldest first";
 		this.sortActionEl.setAttribute("aria-label", label);
 		setIcon(this.sortActionEl, icon);
 	}

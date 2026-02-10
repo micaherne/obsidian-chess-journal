@@ -255,6 +255,48 @@ describe("PgnProvider", () => {
 		});
 	});
 
+	describe("sortByDate", () => {
+		it("sorts games into chronological order", () => {
+			// Load games out of date order: Feb, Jan, Mar
+			const feb = `[Event "Feb"]\n[Date "2024.02.15"]\n\n1.e4 e5 1-0`;
+			const jan = `[Event "Jan"]\n[Date "2024.01.10"]\n\n1.d4 d5 0-1`;
+			const mar = `[Event "Mar"]\n[Date "2024.03.20"]\n\n1.c4 c5 1/2-1/2`;
+			const provider = createProvider(feb + "\n\n" + jan + "\n\n" + mar);
+
+			expect(provider.getGames(0, 3).map(g => g.headers["Event"]))
+				.toEqual(["Feb", "Jan", "Mar"]);
+
+			const perm = provider.sortByDate();
+
+			expect(provider.getGames(0, 3).map(g => g.headers["Event"]))
+				.toEqual(["Jan", "Feb", "Mar"]);
+			expect(perm).toEqual([1, 0, 2]);
+		});
+
+		it("returns identity permutation for already-sorted games", () => {
+			const content = GAME_1 + "\n\n" + GAME_2 + "\n\n" + GAME_3;
+			const provider = createProvider(content);
+			const perm = provider.sortByDate();
+			expect(perm).toEqual([0, 1, 2]);
+		});
+
+		it("preserves getGamePgn after sorting", () => {
+			const feb = `[Event "Feb"]\n[Date "2024.02.15"]\n\n1.e4 e5 1-0`;
+			const jan = `[Event "Jan"]\n[Date "2024.01.10"]\n\n1.d4 d5 0-1`;
+			const provider = createProvider(feb + "\n\n" + jan);
+
+			provider.sortByDate();
+
+			const pgn0 = provider.getGamePgn(0);
+			expect(pgn0).toContain('[Event "Jan"]');
+			expect(pgn0).toContain("1.d4 d5");
+
+			const pgn1 = provider.getGamePgn(1);
+			expect(pgn1).toContain('[Event "Feb"]');
+			expect(pgn1).toContain("1.e4 e5");
+		});
+	});
+
 	describe("close", () => {
 		it("clears all data", () => {
 			const provider = createProvider(GAME_1 + "\n\n" + GAME_2);

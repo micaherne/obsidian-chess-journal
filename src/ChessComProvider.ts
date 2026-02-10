@@ -48,6 +48,10 @@ export class ChessComProvider implements GameProvider {
 		}
 
 		this.inner.loadContent(allPgn.join("\n\n"));
+
+		// Sort games by Date header so date-based ordering works correctly
+		const perm = this.inner.sortByDate();
+		this.gameOwnership = perm.map(i => this.gameOwnership[i]);
 	}
 
 	close(): void {
