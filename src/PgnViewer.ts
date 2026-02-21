@@ -1,5 +1,6 @@
 import { Chessboard } from "cm-chessboard";
 import { Chess, Move } from "chess.js";
+import { Notice, setIcon } from "obsidian";
 import { PieceSet } from "./settings";
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -58,10 +59,14 @@ export class PgnViewer {
 		const nextBtn = controls.createEl("button", { text: "›", cls: "chess-journal-btn" });
 		const endBtn = controls.createEl("button", { text: "»", cls: "chess-journal-btn" });
 
+		const copyFenBtn = controls.createEl("button", { cls: "chess-journal-btn chess-journal-copy-fen", attr: { "aria-label": "Copy FEN" } });
+		setIcon(copyFenBtn, "copy");
+
 		startBtn.addEventListener("click", () => this.goToStart());
 		prevBtn.addEventListener("click", () => this.goToPrev());
 		nextBtn.addEventListener("click", () => this.goToNext());
 		endBtn.addEventListener("click", () => this.goToEnd());
+		copyFenBtn.addEventListener("click", () => this.copyFen());
 
 		// Moves panel
 		this.movesPanel = wrapper.createEl("div", { cls: "chess-journal-moves" });
@@ -171,6 +176,14 @@ export class PgnViewer {
 	goToMove(index: number) {
 		this.currentMoveIndex = index;
 		this.updateBoard();
+	}
+
+	private copyFen() {
+		const fen = this.currentMoveIndex < 0
+			? START_FEN
+			: this.moves[this.currentMoveIndex].after;
+		navigator.clipboard.writeText(fen);
+		new Notice("FEN copied to clipboard");
 	}
 
 	destroy() {
