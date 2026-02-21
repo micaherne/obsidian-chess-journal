@@ -56,12 +56,14 @@ export interface ChessJournalSettings {
 	pieceSet: PieceSet;
 	externalSources: ExternalSource[];
 	notesFolder: string;
+	hideClock: boolean;
 }
 
 export const DEFAULT_SETTINGS: ChessJournalSettings = {
 	pieceSet: "standard",
 	externalSources: [],
 	notesFolder: "",
+	hideClock: true,
 };
 
 export interface ChessJournalPluginInterface {
@@ -93,6 +95,16 @@ export class ChessJournalSettingTab extends PluginSettingTab {
 					this.plugin.settings.pieceSet = value as PieceSet;
 					await this.plugin.saveSettings();
 					this.plugin.injectPiecesSprite();
+				}));
+
+		new Setting(containerEl)
+			.setName("Hide clock annotations")
+			.setDesc("Hide clock times (e.g. [%clk 0:09:58]) from PGN comments")
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.hideClock)
+				.onChange(async (value: boolean) => {
+					this.plugin.settings.hideClock = value;
+					await this.plugin.saveSettings();
 				}));
 
 		new Setting(containerEl)

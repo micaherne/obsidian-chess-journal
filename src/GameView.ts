@@ -79,7 +79,7 @@ export class GameView extends ItemView {
 		if (!this.pgn) return;
 
 		try {
-			this.viewer = new PgnViewer(this.contentEl, this.pgn, this.settings.pieceSet);
+			this.viewer = new PgnViewer(this.contentEl, this.pgn, this.settings.pieceSet, this.settings.hideClock);
 		} catch (e) {
 			this.contentEl.createEl("div", {
 				text: `Error loading game: ${e.message}`,

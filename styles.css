@@ -128,10 +128,16 @@
 	background: var(--interactive-accent);
 }
 
-.chess-journal-copy-fen {
+.chess-journal-copy-fen,
+.chess-journal-clock-toggle {
 	flex: none;
 	font-size: 1em;
 	padding: 0.4em 0.6em;
+}
+
+.chess-journal-clock-toggle.is-active {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
 }
 
 .chess-journal-moves {

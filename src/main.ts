@@ -75,7 +75,7 @@ export default class ChessJournalPlugin extends Plugin {
 			const pgn = source.trim();
 
 			try {
-				const viewer = new PgnViewer(el, pgn, this.settings.pieceSet);
+				const viewer = new PgnViewer(el, pgn, this.settings.pieceSet, this.settings.hideClock);
 				this.pgnViewers.push(viewer);
 			} catch (e) {
 				el.createEl("div", {

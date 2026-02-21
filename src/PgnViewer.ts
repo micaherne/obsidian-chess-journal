@@ -4,6 +4,7 @@ import { Notice, setIcon } from "obsidian";
 import { PieceSet } from "./settings";
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+const CLOCK_PATTERN = /\[%clk\s+[^\]]*\]/g;
 
 export class PgnViewer {
 	private board: Chessboard;
@@ -13,12 +14,18 @@ export class PgnViewer {
 	private currentMoveIndex: number = -1; // -1 = starting position
 	private moveElements: HTMLElement[] = [];
 	private movesPanel: HTMLElement;
+	private hideClock: boolean;
+	private hasClock: boolean;
+	private clockToggleBtn: HTMLElement | null = null;
 
 	constructor(
 		container: HTMLElement,
 		pgn: string,
-		pieceSet: PieceSet
+		pieceSet: PieceSet,
+		hideClock: boolean = true
 	) {
+		this.hideClock = hideClock;
+
 		// Parse the PGN
 		const chess = new Chess();
 		chess.loadPgn(pgn);
@@ -26,8 +33,13 @@ export class PgnViewer {
 
 		// Get comments as a map from FEN to comment
 		this.comments = new Map();
+		this.hasClock = false;
 		for (const { fen, comment } of chess.getComments()) {
 			this.comments.set(fen, comment);
+			if (CLOCK_PATTERN.test(comment)) {
+				this.hasClock = true;
+			}
+			CLOCK_PATTERN.lastIndex = 0;
 		}
 
 		// Get headers
@@ -62,6 +74,13 @@ export class PgnViewer {
 		const copyFenBtn = controls.createEl("button", { cls: "chess-journal-btn chess-journal-copy-fen", attr: { "aria-label": "Copy FEN" } });
 		setIcon(copyFenBtn, "copy");
 
+		if (this.hasClock) {
+			this.clockToggleBtn = controls.createEl("button", { cls: "chess-journal-btn chess-journal-clock-toggle", attr: { "aria-label": "Toggle clock annotations" } });
+			setIcon(this.clockToggleBtn, "clock");
+			this.updateClockToggleState();
+			this.clockToggleBtn.addEventListener("click", () => this.toggleClock());
+		}
+
 		startBtn.addEventListener("click", () => this.goToStart());
 		prevBtn.addEventListener("click", () => this.goToPrev());
 		nextBtn.addEventListener("click", () => this.goToNext());
@@ -85,6 +104,12 @@ export class PgnViewer {
 				}
 			}
 		});
+	}
+
+	private getDisplayComment(comment: string): string | null {
+		if (!this.hideClock) return comment;
+		const stripped = comment.replace(CLOCK_PATTERN, "").trim();
+		return stripped || null;
 	}
 
 	private renderMoves(container: HTMLElement) {
@@ -111,12 +136,15 @@ export class PgnViewer {
 			this.moveElements.push(moveEl);
 
 			// Add comment if present for this position
-			const comment = this.comments.get(move.after);
-			if (comment) {
-				container.createEl("span", {
-					text: comment,
-					cls: "chess-journal-comment"
-				});
+			const rawComment = this.comments.get(move.after);
+			if (rawComment) {
+				const display = this.getDisplayComment(rawComment);
+				if (display) {
+					container.createEl("span", {
+						text: display,
+						cls: "chess-journal-comment"
+					});
+				}
 			}
 		}
 
@@ -127,6 +155,22 @@ export class PgnViewer {
 				cls: "chess-journal-result"
 			});
 		}
+	}
+
+	private updateClockToggleState() {
+		this.clockToggleBtn?.classList.toggle("is-active", !this.hideClock);
+	}
+
+	private toggleClock() {
+		this.hideClock = !this.hideClock;
+		this.updateClockToggleState();
+
+		// Re-render moves panel and restore highlighting
+		const savedIndex = this.currentMoveIndex;
+		this.movesPanel.empty();
+		this.renderMoves(this.movesPanel);
+		this.currentMoveIndex = savedIndex;
+		this.updateBoard();
 	}
 
 	private updateBoard() {
