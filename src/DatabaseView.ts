@@ -251,6 +251,13 @@ export class DatabaseView extends ItemView {
 		this.loadMoreEl.style.display = "none";
 	}
 
+	private reversePage(total: number, displayed: number): { offset: number; limit: number } {
+		return {
+			offset: Math.max(0, total - displayed - PAGE_SIZE),
+			limit: Math.min(PAGE_SIZE, total - displayed),
+		};
+	}
+
 	private loadPage(): void {
 		if (!this.provider) return;
 
@@ -258,15 +265,13 @@ export class DatabaseView extends ItemView {
 		let entries: GameEntry[];
 
 		if (this.searchQuery) {
-			if (this.sortDesc && displayed === 0) {
-				// Probe to get the total count for reverse pagination
-				const probe = this.provider.search(this.searchQuery, 0, 0);
-				this.totalCount = probe.total;
-			}
 			if (this.sortDesc) {
-				const reverseOffset = Math.max(0, this.totalCount - displayed - PAGE_SIZE);
-				const limit = Math.min(PAGE_SIZE, this.totalCount - displayed);
-				const result = this.provider.search(this.searchQuery, reverseOffset, limit);
+				if (displayed === 0) {
+					// Probe to get the total count for reverse pagination
+					this.totalCount = this.provider.search(this.searchQuery, 0, 0).total;
+				}
+				const { offset, limit } = this.reversePage(this.totalCount, displayed);
+				const result = this.provider.search(this.searchQuery, offset, limit);
 				entries = result.games.reverse();
 				this.totalCount = result.total;
 			} else {
@@ -277,9 +282,8 @@ export class DatabaseView extends ItemView {
 		} else {
 			this.totalCount = this.provider.getGameCount();
 			if (this.sortDesc) {
-				const reverseOffset = Math.max(0, this.totalCount - displayed - PAGE_SIZE);
-				const limit = Math.min(PAGE_SIZE, this.totalCount - displayed);
-				entries = this.provider.getGames(reverseOffset, limit).reverse();
+				const { offset, limit } = this.reversePage(this.totalCount, displayed);
+				entries = this.provider.getGames(offset, limit).reverse();
 			} else {
 				entries = this.provider.getGames(displayed, PAGE_SIZE);
 			}
