@@ -95,6 +95,20 @@ export default class ChessJournalPlugin extends Plugin {
 		// Game viewer (for games opened from database)
 		this.registerView(VIEW_TYPE_GAME, (leaf) => new GameView(leaf, this.settings));
 
+		// Ribbon icon to open the database panel
+		this.addRibbonIcon("database", "Open game database", () => {
+			const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_DATABASE);
+			if (existing.length > 0) {
+				this.app.workspace.revealLeaf(existing[0]);
+				return;
+			}
+			const leaf = this.app.workspace.getRightLeaf(false);
+			if (leaf) {
+				leaf.setViewState({ type: VIEW_TYPE_DATABASE, active: true });
+				this.app.workspace.revealLeaf(leaf);
+			}
+		});
+
 		// Command to open the database panel
 		this.addCommand({
 			id: "open-game-database",
