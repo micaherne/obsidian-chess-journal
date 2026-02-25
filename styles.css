@@ -212,6 +212,15 @@
 	font-size: var(--font-text-size);
 }
 
+/* Settings */
+.chess-journal-source-path {
+	font-size: 0.7em;
+	color: var(--text-faint);
+	font-weight: normal;
+	margin-top: 2px;
+	word-break: break-all;
+}
+
 /* Database browser panel */
 .chess-journal-database {
 	display: flex;

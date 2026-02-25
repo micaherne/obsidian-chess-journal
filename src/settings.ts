@@ -181,7 +181,7 @@ export class ChessJournalSettingTab extends PluginSettingTab {
 		}
 
 		for (const source of fileSources) {
-			new Setting(container)
+			const setting = new Setting(container)
 				.setName(sourceDisplayName(source))
 				.setDesc(source.type === "pgn" ? "PGN file" : "SCID database")
 				.addButton(button => button
@@ -193,6 +193,10 @@ export class ChessJournalSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 						this.display();
 					}));
+			setting.nameEl.createEl("div", {
+				text: source.path,
+				cls: "chess-journal-source-path",
+			});
 		}
 	}
 
