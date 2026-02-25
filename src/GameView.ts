@@ -2,6 +2,7 @@ import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
 import { PgnViewer } from "./PgnViewer";
 import { ChessJournalSettings } from "./settings";
 import { createGameNote } from "./createGameNote";
+import { createPositionNote } from "./createPositionNote";
 
 export const VIEW_TYPE_GAME = "chess-journal-game-view";
 
@@ -41,6 +42,7 @@ export class GameView extends ItemView {
 
 	async onOpen(): Promise<void> {
 		this.addAction("file-plus", "Create note", () => this.onCreateNote());
+		this.addAction("map-pin", "Create position note", () => this.onCreatePositionNote());
 
 		if (this.pgn) {
 			this.render();
@@ -51,6 +53,22 @@ export class GameView extends ItemView {
 		if (this.viewer) {
 			this.viewer.destroy();
 			this.viewer = null;
+		}
+	}
+
+	private async onCreatePositionNote(): Promise<void> {
+		if (!this.viewer) {
+			new Notice("No game loaded");
+			return;
+		}
+		try {
+			const fen = this.viewer.getCurrentFen();
+			const file = await createPositionNote(this.app, this.settings.positionsFolder, fen, this.pgn);
+			const leaf = this.app.workspace.getLeaf("tab");
+			await leaf.openFile(file);
+			new Notice(`Created ${file.path}`);
+		} catch (e) {
+			new Notice(`Failed to create note: ${e.message}`);
 		}
 	}
 

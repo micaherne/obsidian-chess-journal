@@ -222,11 +222,14 @@ export class PgnViewer {
 		this.updateBoard();
 	}
 
-	private copyFen() {
-		const fen = this.currentMoveIndex < 0
+	getCurrentFen(): string {
+		return this.currentMoveIndex < 0
 			? START_FEN
 			: this.moves[this.currentMoveIndex].after;
-		navigator.clipboard.writeText(fen);
+	}
+
+	private copyFen() {
+		navigator.clipboard.writeText(this.getCurrentFen());
 		new Notice("FEN copied to clipboard");
 	}
 
