@@ -12,6 +12,8 @@ import { VIEW_TYPE_PGN, PgnFileView } from "./PgnFileView";
 import { VIEW_TYPE_DATABASE, DatabaseView } from "./DatabaseView";
 import { VIEW_TYPE_GAME, GameView } from "./GameView";
 import { VIEW_TYPE_OPENING_EXPLORER, OpeningExplorerView } from "./OpeningExplorerView";
+import { VIEW_TYPE_REPERTOIRE, RepertoireView } from "./RepertoireView";
+import { NewRepertoireModal } from "./NewRepertoireModal";
 
 const SPRITE_WRAPPER_ID = "chess-journal-sprite";
 
@@ -99,6 +101,10 @@ export default class ChessJournalPlugin extends Plugin {
 		// Opening explorer panel
 		this.registerView(VIEW_TYPE_OPENING_EXPLORER, (leaf) => new OpeningExplorerView(leaf, this.settings));
 
+		// Repertoire view (opens from .repertoire files)
+		this.registerView(VIEW_TYPE_REPERTOIRE, (leaf) => new RepertoireView(leaf, this.settings));
+		this.registerExtensions(["repertoire"], VIEW_TYPE_REPERTOIRE);
+
 		// Ribbon icon to open the database panel
 		this.addRibbonIcon("database", "Open game database", () => {
 			const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_DATABASE);
@@ -162,6 +168,15 @@ export default class ChessJournalPlugin extends Plugin {
 				}
 			},
 		});
+
+		// Command to create a new repertoire
+		this.addCommand({
+			id: "create-repertoire",
+			name: "Create new repertoire",
+			callback: () => {
+				new NewRepertoireModal(this.app, this.settings).open();
+			},
+		});
 	}
 
 	injectPiecesSprite() {
@@ -195,10 +210,11 @@ export default class ChessJournalPlugin extends Plugin {
 	onunload() {
 		console.log("Unloading Chess Journal plugin");
 
-		// Detach database, game, and explorer views
+		// Detach database, game, explorer, and repertoire views
 		this.app.workspace.detachLeavesOfType(VIEW_TYPE_DATABASE);
 		this.app.workspace.detachLeavesOfType(VIEW_TYPE_GAME);
 		this.app.workspace.detachLeavesOfType(VIEW_TYPE_OPENING_EXPLORER);
+		this.app.workspace.detachLeavesOfType(VIEW_TYPE_REPERTOIRE);
 
 		// Remove the injected sprite
 		const wrapper = document.getElementById(SPRITE_WRAPPER_ID);

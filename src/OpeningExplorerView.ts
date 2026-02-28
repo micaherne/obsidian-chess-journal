@@ -1,8 +1,10 @@
-import { ItemView, TFile, ViewStateResult, WorkspaceLeaf, setIcon } from "obsidian";
+import { ItemView, Menu, Notice, TFile, ViewStateResult, WorkspaceLeaf, setIcon } from "obsidian";
+import { Chess } from "chess.js";
 import { Chessboard } from "cm-chessboard";
 import { ChessJournalSettings } from "./settings";
 import { createOpeningNote } from "./createOpeningNote";
 import { ECO_DATA, EcoEntry } from "./eco-data";
+import { RepertoireData, RepertoireNode } from "./RepertoireTypes";
 
 export const VIEW_TYPE_OPENING_EXPLORER = "chess-journal-opening-explorer";
 
@@ -439,6 +441,34 @@ export class OpeningExplorerView extends ItemView {
 		}
 	}
 
+	private async addLineToRepertoire(moves: string[], repFile: TFile): Promise<void> {
+		try {
+			const raw = await this.app.vault.read(repFile);
+			const data: RepertoireData = JSON.parse(raw);
+			const chess = new Chess();
+			let currentNode: RepertoireNode = data.root;
+
+			for (const san of moves) {
+				const existing = currentNode.children.find(c => c.san === san);
+				if (existing) {
+					chess.move(san);
+					currentNode = existing;
+				} else {
+					chess.move(san);
+					const epd = chess.fen().split(" ").slice(0, 4).join(" ");
+					const newNode: RepertoireNode = { san, epd, noteFile: null, children: [] };
+					currentNode.children.push(newNode);
+					currentNode = newNode;
+				}
+			}
+
+			await this.app.vault.modify(repFile, JSON.stringify(data, null, 2));
+			new Notice(`Added ${moves.length} moves to ${repFile.basename}`);
+		} catch (e) {
+			new Notice(`Failed to add to repertoire: ${e.message}`);
+		}
+	}
+
 	private renderMoveNode(container: HTMLElement, node: MoveTreeNode, parentDepth: number): void {
 		const key = node.moves.join(" ");
 		const isExpanded = this.expandedMovePaths.has(key);
@@ -476,6 +506,23 @@ export class OpeningExplorerView extends ItemView {
 				}
 			}
 			this.render();
+		});
+
+		header.addEventListener("contextmenu", (e: MouseEvent) => {
+			e.preventDefault();
+			const repFiles = this.app.vault.getFiles()
+				.filter(f => f.extension === "repertoire");
+			if (repFiles.length === 0) return;
+
+			const menu = new Menu();
+			for (const repFile of repFiles) {
+				menu.addItem(item => item
+					.setTitle(`Add to ${repFile.basename}`)
+					.setIcon("plus")
+					.onClick(() => this.addLineToRepertoire(node.moves, repFile))
+				);
+			}
+			menu.showAtMouseEvent(e);
 		});
 
 		if (!isExpanded || !hasChildren) return;

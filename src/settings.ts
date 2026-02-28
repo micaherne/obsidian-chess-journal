@@ -58,6 +58,7 @@ export interface ChessJournalSettings {
 	notesFolder: string;
 	positionsFolder: string;
 	openingsFolder: string;
+	repertoireNotesFolder: string;
 	hideClock: boolean;
 }
 
@@ -67,6 +68,7 @@ export const DEFAULT_SETTINGS: ChessJournalSettings = {
 	notesFolder: "",
 	positionsFolder: "",
 	openingsFolder: "",
+	repertoireNotesFolder: "",
 	hideClock: true,
 };
 
@@ -141,6 +143,17 @@ export class ChessJournalSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.openingsFolder)
 				.onChange(async (value: string) => {
 					this.plugin.settings.openingsFolder = value.trim();
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName("Repertoire notes folder")
+			.setDesc("Folder for position notes created from the repertoire view (blank = vault root)")
+			.addText(text => text
+				.setPlaceholder("e.g. Repertoire Notes")
+				.setValue(this.plugin.settings.repertoireNotesFolder)
+				.onChange(async (value: string) => {
+					this.plugin.settings.repertoireNotesFolder = value.trim();
 					await this.plugin.saveSettings();
 				}));
 
