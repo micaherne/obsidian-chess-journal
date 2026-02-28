@@ -11,6 +11,7 @@ import { PgnViewer } from "./PgnViewer";
 import { VIEW_TYPE_PGN, PgnFileView } from "./PgnFileView";
 import { VIEW_TYPE_DATABASE, DatabaseView } from "./DatabaseView";
 import { VIEW_TYPE_GAME, GameView } from "./GameView";
+import { VIEW_TYPE_OPENING_EXPLORER, OpeningExplorerView } from "./OpeningExplorerView";
 
 const SPRITE_WRAPPER_ID = "chess-journal-sprite";
 
@@ -95,6 +96,9 @@ export default class ChessJournalPlugin extends Plugin {
 		// Game viewer (for games opened from database)
 		this.registerView(VIEW_TYPE_GAME, (leaf) => new GameView(leaf, this.settings));
 
+		// Opening explorer panel
+		this.registerView(VIEW_TYPE_OPENING_EXPLORER, (leaf) => new OpeningExplorerView(leaf, this.settings));
+
 		// Ribbon icon to open the database panel
 		this.addRibbonIcon("database", "Open game database", () => {
 			const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_DATABASE);
@@ -122,6 +126,38 @@ export default class ChessJournalPlugin extends Plugin {
 				const leaf = this.app.workspace.getRightLeaf(false);
 				if (leaf) {
 					leaf.setViewState({ type: VIEW_TYPE_DATABASE, active: true });
+					this.app.workspace.revealLeaf(leaf);
+				}
+			},
+		});
+
+		// Ribbon icon to open the opening explorer
+		this.addRibbonIcon("book-open", "Open opening explorer", () => {
+			const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_OPENING_EXPLORER);
+			if (existing.length > 0) {
+				this.app.workspace.revealLeaf(existing[0]);
+				return;
+			}
+			const leaf = this.app.workspace.getRightLeaf(false);
+			if (leaf) {
+				leaf.setViewState({ type: VIEW_TYPE_OPENING_EXPLORER, active: true });
+				this.app.workspace.revealLeaf(leaf);
+			}
+		});
+
+		// Command to open the opening explorer
+		this.addCommand({
+			id: "open-opening-explorer",
+			name: "Open opening explorer",
+			callback: () => {
+				const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_OPENING_EXPLORER);
+				if (existing.length > 0) {
+					this.app.workspace.revealLeaf(existing[0]);
+					return;
+				}
+				const leaf = this.app.workspace.getRightLeaf(false);
+				if (leaf) {
+					leaf.setViewState({ type: VIEW_TYPE_OPENING_EXPLORER, active: true });
 					this.app.workspace.revealLeaf(leaf);
 				}
 			},
@@ -159,9 +195,10 @@ export default class ChessJournalPlugin extends Plugin {
 	onunload() {
 		console.log("Unloading Chess Journal plugin");
 
-		// Detach database and game views
+		// Detach database, game, and explorer views
 		this.app.workspace.detachLeavesOfType(VIEW_TYPE_DATABASE);
 		this.app.workspace.detachLeavesOfType(VIEW_TYPE_GAME);
+		this.app.workspace.detachLeavesOfType(VIEW_TYPE_OPENING_EXPLORER);
 
 		// Remove the injected sprite
 		const wrapper = document.getElementById(SPRITE_WRAPPER_ID);

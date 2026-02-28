@@ -57,6 +57,7 @@ export interface ChessJournalSettings {
 	externalSources: ExternalSource[];
 	notesFolder: string;
 	positionsFolder: string;
+	openingsFolder: string;
 	hideClock: boolean;
 }
 
@@ -65,6 +66,7 @@ export const DEFAULT_SETTINGS: ChessJournalSettings = {
 	externalSources: [],
 	notesFolder: "",
 	positionsFolder: "",
+	openingsFolder: "",
 	hideClock: true,
 };
 
@@ -128,6 +130,17 @@ export class ChessJournalSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.positionsFolder)
 				.onChange(async (value: string) => {
 					this.plugin.settings.positionsFolder = value.trim();
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName("Openings folder")
+			.setDesc("Folder for opening notes created from the opening explorer (blank = vault root)")
+			.addText(text => text
+				.setPlaceholder("e.g. Openings")
+				.setValue(this.plugin.settings.openingsFolder)
+				.onChange(async (value: string) => {
+					this.plugin.settings.openingsFolder = value.trim();
 					await this.plugin.saveSettings();
 				}));
 
