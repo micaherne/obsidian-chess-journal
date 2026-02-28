@@ -49,7 +49,7 @@ export class NewRepertoireModal extends Modal {
 			root: {
 				san: null,
 				epd: START_EPD,
-				noteFile: null,
+				
 				children: [],
 			},
 		};

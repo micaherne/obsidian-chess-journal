@@ -36,6 +36,7 @@ const context = await esbuild.context({
 	target: "es2020",
 	loader: {
 		".svg": "text",
+		".tsv": "text",
 	},
 	logLevel: "info",
 	sourcemap: prod ? false : "inline",

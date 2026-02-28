@@ -456,7 +456,7 @@ export class OpeningExplorerView extends ItemView {
 				} else {
 					chess.move(san);
 					const epd = chess.fen().split(" ").slice(0, 4).join(" ");
-					const newNode: RepertoireNode = { san, epd, noteFile: null, children: [] };
+					const newNode: RepertoireNode = { san, epd, children: [] };
 					currentNode.children.push(newNode);
 					currentNode = newNode;
 				}

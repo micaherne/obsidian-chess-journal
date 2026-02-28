@@ -62,6 +62,8 @@ export class RepertoireView extends TextFileView {
 	private boardRafId: number | null = null;
 	private expandedTreePaths = new Set<string>();
 	private showEcoLabels = false;
+	private noteIndex = new Map<string, TFile>();
+	private pendingNote: { epd: string; file: TFile } | null = null;
 
 	constructor(leaf: WorkspaceLeaf, settings: ChessJournalSettings) {
 		super(leaf);
@@ -111,7 +113,7 @@ export class RepertoireView extends TextFileView {
 		return {
 			version: 1,
 			color: "black",
-			root: { san: null, epd: START_EPD, noteFile: null, children: [] },
+			root: { san: null, epd: START_EPD, children: [] },
 		};
 	}
 
@@ -190,6 +192,23 @@ export class RepertoireView extends TextFileView {
 		).open();
 	}
 
+	/** Build an EPD → TFile map for notes belonging to this repertoire. */
+	private buildNoteIndex(): void {
+		const repName = this.file?.basename ?? "";
+		this.noteIndex = new Map<string, TFile>();
+		for (const f of this.app.vault.getMarkdownFiles()) {
+			const fm = this.app.metadataCache.getFileCache(f)?.frontmatter;
+			if (fm?.epd && fm?.repertoire === repName) {
+				this.noteIndex.set(fm.epd as string, f);
+			}
+		}
+		// Inject a just-created note in case the metadata cache hasn't indexed it yet
+		if (this.pendingNote && !this.noteIndex.has(this.pendingNote.epd)) {
+			this.noteIndex.set(this.pendingNote.epd, this.pendingNote.file);
+		}
+		this.pendingNote = null;
+	}
+
 	private getEcoForEpd(epd: string): { eco: string; name: string } | null {
 		const match = ECO_DATA.find(e => e.epd === epd);
 		return match ? { eco: match.eco, name: match.name } : null;
@@ -214,6 +233,7 @@ export class RepertoireView extends TextFileView {
 	// -------------------------------------------------------------------------
 
 	private render(): void {
+		this.buildNoteIndex();
 		this.destroyBoard();
 		this.syncChess();
 		this.contentEl.empty();
@@ -334,25 +354,21 @@ export class RepertoireView extends TextFileView {
 	}
 
 	private renderNoteSection(container: HTMLElement): void {
-		const currentNode = this.getCurrentNode();
+		const epd = this.chess.fen().split(" ").slice(0, 4).join(" ");
 		const noteSection = container.createDiv({ cls: "chess-journal-rep-note-section" });
 
-		if (currentNode.noteFile) {
-			const abstractFile = this.app.vault.getAbstractFileByPath(currentNode.noteFile);
-			if (abstractFile instanceof TFile) {
-				const noteHeader = noteSection.createDiv({ cls: "chess-journal-rep-note-header" });
-	
-				const openBtn = noteHeader.createEl("button", { cls: "chess-journal-rep-note-open-btn" });
-				setIcon(openBtn, "external-link");
-				openBtn.setAttribute("aria-label", "Open note for editing");
-				openBtn.addEventListener("click", () => {
-					this.app.workspace.getLeaf(true).openFile(abstractFile);
-				});
-				// Dedicated content div so MarkdownRenderer appends below the header
-				const noteContent = noteSection.createDiv({ cls: "chess-journal-rep-note-content" });
-				this.renderNoteContent(noteContent, abstractFile);
-				return;
-			}
+		const abstractFile = this.noteIndex.get(epd);
+		if (abstractFile) {
+			const noteHeader = noteSection.createDiv({ cls: "chess-journal-rep-note-header" });
+			const openBtn = noteHeader.createEl("button", { cls: "chess-journal-rep-note-open-btn" });
+			setIcon(openBtn, "external-link");
+			openBtn.setAttribute("aria-label", "Open note for editing");
+			openBtn.addEventListener("click", () => {
+				this.app.workspace.getLeaf(true).openFile(abstractFile);
+			});
+			const noteContent = noteSection.createDiv({ cls: "chess-journal-rep-note-content" });
+			this.renderNoteContent(noteContent, abstractFile);
+			return;
 		}
 
 		const addBtn = noteSection.createEl("button", {
@@ -372,9 +388,8 @@ export class RepertoireView extends TextFileView {
 					ecoMatch?.eco ?? null,
 					ecoMatch?.name ?? null,
 				);
-				node.noteFile = noteFile.path;
+				this.pendingNote = { epd, file: noteFile };
 				this.requestSave();
-				await this.app.workspace.getLeaf(true).openFile(noteFile);
 				this.render();
 			} catch (e) {
 				new Notice(`Failed to create note: ${e.message}`);
@@ -429,7 +444,7 @@ export class RepertoireView extends TextFileView {
 					const existing = currentNode.children.find(c => c.san === san);
 					if (!existing) {
 						const epd = this.chess.fen().split(" ").slice(0, 4).join(" ");
-						currentNode.children.push({ san, epd, noteFile: null, children: [] });
+						currentNode.children.push({ san, epd, children: [] });
 						this.requestSave();
 					}
 					this.currentPath = [...this.currentPath, san];
@@ -613,7 +628,7 @@ export class RepertoireView extends TextFileView {
 		}
 
 		// Note indicator if any node in the chain has a linked note
-		if (chain.some(n => n.noteFile && this.app.vault.getAbstractFileByPath(n.noteFile) instanceof TFile)) {
+		if (chain.some(n => this.noteIndex.has(n.epd))) {
 			const noteIcon = header.createSpan({ cls: "chess-journal-rep-tree-note-icon" });
 			setIcon(noteIcon, "file-text");
 		}
