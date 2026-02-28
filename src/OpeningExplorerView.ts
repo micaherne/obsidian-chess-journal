@@ -1,4 +1,5 @@
 import { ItemView, TFile, ViewStateResult, WorkspaceLeaf, setIcon } from "obsidian";
+import { Chessboard } from "cm-chessboard";
 import { ChessJournalSettings } from "./settings";
 import { createOpeningNote } from "./createOpeningNote";
 import { ECO_DATA, EcoEntry } from "./eco-data";
@@ -74,7 +75,7 @@ function sortMoveNodes(nodes: MoveTreeNode[]): void {
 	}
 }
 
-function buildMoveTree(): MoveTreeNode[] {
+function buildMoveTree(): { roots: MoveTreeNode[], lookup: Map<string, MoveTreeNode> } {
 	// Parse moves for every entry
 	const parsed = ECO_DATA.map(entry => ({
 		entry,
@@ -107,10 +108,10 @@ function buildMoveTree(): MoveTreeNode[] {
 	}
 
 	sortMoveNodes(roots);
-	return roots;
+	return { roots, lookup };
 }
 
-const MOVE_TREE: MoveTreeNode[] = buildMoveTree();
+const { roots: MOVE_TREE, lookup: MOVE_NODE_LOOKUP } = buildMoveTree();
 
 // ---------------------------------------------------------------------------
 // View
@@ -130,6 +131,12 @@ export class OpeningExplorerView extends ItemView {
 
 	// Move tree state
 	private expandedMovePaths = new Set<string>();
+	private selectedNodeKey: string | null = null;
+
+	// Board
+	private showBoard = false;
+	private currentBoard: Chessboard | null = null;
+	private boardRafId: number | null = null;
 
 	constructor(leaf: WorkspaceLeaf, settings: ChessJournalSettings) {
 		super(leaf);
@@ -147,6 +154,8 @@ export class OpeningExplorerView extends ItemView {
 			expandedCodes: [...this.expandedCodes],
 			collapsedLetters: [...this.collapsedLetters],
 			expandedMovePaths: [...this.expandedMovePaths],
+			selectedNodeKey: this.selectedNodeKey,
+			showBoard: this.showBoard,
 		};
 	}
 
@@ -156,14 +165,30 @@ export class OpeningExplorerView extends ItemView {
 		if (Array.isArray(state.expandedCodes)) this.expandedCodes = new Set(state.expandedCodes as string[]);
 		if (Array.isArray(state.collapsedLetters)) this.collapsedLetters = new Set(state.collapsedLetters as string[]);
 		if (Array.isArray(state.expandedMovePaths)) this.expandedMovePaths = new Set(state.expandedMovePaths as string[]);
+		if (typeof state.selectedNodeKey === "string") this.selectedNodeKey = state.selectedNodeKey;
+		if (typeof state.showBoard === "boolean") this.showBoard = state.showBoard;
 		this.render();
 		return super.setState(state, result);
 	}
 
-	async onOpen(): Promise<void> { this.render(); }
+	async onOpen(): Promise<void> {
+		this.render();
+	}
 
 	async onClose(): Promise<void> {
 		if (this.searchTimeout !== null) window.clearTimeout(this.searchTimeout);
+		this.destroyBoard();
+	}
+
+	private destroyBoard(): void {
+		if (this.boardRafId !== null) {
+			window.cancelAnimationFrame(this.boardRafId);
+			this.boardRafId = null;
+		}
+		if (this.currentBoard) {
+			this.currentBoard.destroy();
+			this.currentBoard = null;
+		}
 	}
 
 	// ---------------------------------------------------------------------------
@@ -174,6 +199,7 @@ export class OpeningExplorerView extends ItemView {
 		const treeEl = this.contentEl.querySelector<HTMLElement>(".chess-journal-explorer-tree");
 		const savedScroll = treeEl?.scrollTop ?? 0;
 
+		this.destroyBoard();
 		this.contentEl.empty();
 		const container = this.contentEl.createDiv({ cls: "chess-journal-explorer" });
 
@@ -185,12 +211,35 @@ export class OpeningExplorerView extends ItemView {
 			this.renderMoveContent(container);
 		}
 
-		if (savedScroll > 0) {
-			window.requestAnimationFrame(() => {
+		// Defer board instantiation and scroll restore until after layout
+		this.boardRafId = window.requestAnimationFrame(() => {
+			this.boardRafId = null;
+
+			if (this.showBoard && this.viewMode === "moves") {
+				const boardEl = this.contentEl.querySelector<HTMLElement>(".chess-journal-explorer-board");
+				if (boardEl) {
+					const node = this.selectedNodeKey ? MOVE_NODE_LOOKUP.get(this.selectedNodeKey) : null;
+					const fen = node?.entry.epd
+						? node.entry.epd + " 0 1"
+						: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+					this.currentBoard = new Chessboard(boardEl, {
+						position: fen,
+						assetsUrl: "",
+						assetsCache: true,
+						style: {
+							cssClass: "chess-journal",
+							showCoordinates: true,
+							pieces: { file: `pieces/${this.settings.pieceSet}.svg` },
+						},
+					});
+				}
+			}
+
+			if (savedScroll > 0) {
 				const newTreeEl = this.contentEl.querySelector<HTMLElement>(".chess-journal-explorer-tree");
 				if (newTreeEl) newTreeEl.scrollTop = savedScroll;
-			});
-		}
+			}
+		});
 	}
 
 	private renderToolbar(container: HTMLElement): void {
@@ -369,6 +418,21 @@ export class OpeningExplorerView extends ItemView {
 	// ---------------------------------------------------------------------------
 
 	private renderMoveContent(container: HTMLElement): void {
+		// Collapsible board section
+		const boardHeader = container.createDiv({ cls: "chess-journal-explorer-board-header" });
+		const boardToggle = boardHeader.createSpan({ cls: "chess-journal-explorer-toggle" });
+		setIcon(boardToggle, this.showBoard ? "chevron-down" : "chevron-right");
+		boardHeader.createSpan({ text: "Board" });
+		boardHeader.addEventListener("click", () => {
+			this.showBoard = !this.showBoard;
+			this.render();
+		});
+
+		if (this.showBoard) {
+			const boardWrap = container.createDiv({ cls: "chess-journal-explorer-board-wrap" });
+			boardWrap.createDiv({ cls: "chess-journal-explorer-board" });
+		}
+
 		const tree = container.createDiv({ cls: "chess-journal-explorer-tree" });
 		for (const root of MOVE_TREE) {
 			this.renderMoveNode(tree, root, 0);
@@ -381,7 +445,10 @@ export class OpeningExplorerView extends ItemView {
 		const hasChildren = node.children.length > 0;
 
 		const nodeEl = container.createDiv({ cls: "chess-journal-explorer-move-node" });
-		const header = nodeEl.createDiv({ cls: "chess-journal-explorer-move-header" });
+		const isSelected = key === this.selectedNodeKey;
+		const header = nodeEl.createDiv({
+			cls: "chess-journal-explorer-move-header" + (isSelected ? " is-selected" : ""),
+		});
 
 		const toggle = header.createSpan({ cls: "chess-journal-explorer-toggle" });
 		if (hasChildren) {
@@ -399,16 +466,17 @@ export class OpeningExplorerView extends ItemView {
 		header.createSpan({ cls: "chess-journal-explorer-move-name", text: specificName });
 		header.createSpan({ cls: "chess-journal-explorer-move-eco", text: node.entry.eco });
 
-		if (hasChildren) {
-			header.addEventListener("click", () => {
+		header.addEventListener("click", () => {
+			this.selectedNodeKey = key;
+			if (hasChildren) {
 				if (this.expandedMovePaths.has(key)) {
 					this.expandedMovePaths.delete(key);
 				} else {
 					this.expandedMovePaths.add(key);
 				}
-				this.render();
-			});
-		}
+			}
+			this.render();
+		});
 
 		if (!isExpanded || !hasChildren) return;
 
