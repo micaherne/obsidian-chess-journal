@@ -4,9 +4,23 @@ function sanitizeFilename(name: string): string {
 	return name.replace(/[\\/:*?"<>|]/g, "_");
 }
 
+/** Format a SAN path as a human-readable move sequence, e.g. "1. e4 c5 2. Nf3 d6" */
+export function formatMovePath(path: string[]): string {
+	if (path.length === 0) return "Starting Position";
+	const parts: string[] = [];
+	path.forEach((san, i) => {
+		const ply = i + 1;
+		const moveNum = Math.ceil(ply / 2);
+		if (ply % 2 === 1) parts.push(`${moveNum}. ${san}`);
+		else parts.push(san);
+	});
+	return parts.join(" ");
+}
+
 export async function createRepertoireNote(
 	app: App,
 	folder: string,
+	currentPath: string[],
 	epd: string,
 	repertoireName: string,
 	eco: string | null,
@@ -24,21 +38,20 @@ export async function createRepertoireNote(
 
 	const content = fmLines.join("\n") + "\n\n";
 
-	const folderPath = folder || "";
-	if (folderPath) {
-		const existing = app.vault.getAbstractFileByPath(folderPath);
-		if (!existing) {
-			await app.vault.createFolder(folderPath);
-		}
+	// Subfolder: {folder}/{repertoireName}/
+	const safeName = sanitizeFilename(repertoireName);
+	const folderPath = folder ? `${folder}/${safeName}` : safeName;
+	const existing = app.vault.getAbstractFileByPath(folderPath);
+	if (!existing) {
+		await app.vault.createFolder(folderPath);
 	}
 
-	const dir = folderPath ? folderPath + "/" : "";
-	// Use piece placement part of EPD as filename base (human-readable, unique per position)
-	const baseName = sanitizeFilename(epd.split(" ")[0]);
-	let filePath = `${dir}${baseName}.md`;
+	// Filename: formatted move path (unique and human-readable)
+	const baseName = sanitizeFilename(formatMovePath(currentPath));
+	let filePath = `${folderPath}/${baseName}.md`;
 	let counter = 2;
 	while (app.vault.getAbstractFileByPath(filePath)) {
-		filePath = `${dir}${baseName} ${counter}.md`;
+		filePath = `${folderPath}/${baseName} ${counter}.md`;
 		counter++;
 	}
 

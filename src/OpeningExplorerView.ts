@@ -354,7 +354,7 @@ export class OpeningExplorerView extends ItemView {
 		const isExpanded = query ? true : this.expandedCodes.has(code);
 		const rootName = entries[0].name.split(":")[0].trim();
 
-		const codeEl = container.createDiv({ cls: "chess-journal-explorer-code" });
+		const codeEl = container.createDiv({ cls: "chess-journal-explorer-code", attr: { "data-eco": code } });
 		const header = codeEl.createDiv({ cls: "chess-journal-explorer-code-header" });
 		const toggle = header.createSpan({ cls: "chess-journal-explorer-toggle" });
 		setIcon(toggle, isExpanded ? "chevron-down" : "chevron-right");
@@ -530,6 +530,47 @@ export class OpeningExplorerView extends ItemView {
 		const childrenEl = nodeEl.createDiv({ cls: "chess-journal-explorer-move-children" });
 		for (const child of node.children) {
 			this.renderMoveNode(childrenEl, child, node.moves.length);
+		}
+	}
+
+	// ---------------------------------------------------------------------------
+	// Opening explorer sync (called by RepertoireView)
+	// ---------------------------------------------------------------------------
+
+	public navigateToEpd(epd: string): void {
+		const ecoEntry = ECO_DATA.find(e => e.epd === epd);
+		if (!ecoEntry) return;
+
+		if (this.viewMode === "eco") {
+			const code = ecoEntry.eco;
+			const letter = code[0];
+			this.collapsedLetters.delete(letter);
+			this.expandedCodes.add(code);
+			this.render();
+			window.requestAnimationFrame(() => {
+				const el = this.contentEl.querySelector<HTMLElement>(`[data-eco="${code}"]`);
+				el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+			});
+		} else if (this.viewMode === "moves") {
+			const moves = parsePgnMoves(ecoEntry.pgn);
+			const key = moves.join(" ");
+			if (!MOVE_NODE_LOOKUP.has(key)) return;
+
+			// Expand all ancestor nodes so the selected one is visible
+			for (let i = 1; i < moves.length; i++) {
+				const prefix = moves.slice(0, i).join(" ");
+				if (MOVE_NODE_LOOKUP.has(prefix)) {
+					this.expandedMovePaths.add(prefix);
+				}
+			}
+			this.selectedNodeKey = key;
+			this.render();
+			window.requestAnimationFrame(() => {
+				const el = this.contentEl.querySelector<HTMLElement>(
+					".chess-journal-explorer-move-header.is-selected"
+				);
+				el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+			});
 		}
 	}
 }

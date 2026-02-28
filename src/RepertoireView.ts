@@ -1,5 +1,8 @@
 import {
+	App,
 	MarkdownRenderer,
+	Menu,
+	Modal,
 	Notice,
 	TFile,
 	TextFileView,
@@ -14,7 +17,35 @@ import { RepertoireData, RepertoireNode } from "./RepertoireTypes";
 import { createRepertoireNote } from "./createRepertoireNote";
 import { ECO_DATA } from "./eco-data";
 
+class ConfirmModal extends Modal {
+	private title: string;
+	private message: string;
+	private onConfirm: () => void;
+
+	constructor(app: App, title: string, message: string, onConfirm: () => void) {
+		super(app);
+		this.title = title;
+		this.message = message;
+		this.onConfirm = onConfirm;
+	}
+
+	onOpen() {
+		this.contentEl.createEl("h3", { text: this.title });
+		this.contentEl.createEl("p", { text: this.message });
+		const btns = this.contentEl.createDiv({ cls: "modal-button-container" });
+		btns.createEl("button", { text: "Cancel" })
+			.addEventListener("click", () => this.close());
+		const del = btns.createEl("button", { cls: "mod-warning", text: "Delete" });
+		del.addEventListener("click", () => { this.close(); this.onConfirm(); });
+	}
+
+	onClose() { this.contentEl.empty(); }
+}
+
 export const VIEW_TYPE_REPERTOIRE = "chess-journal-repertoire";
+
+// Use string literal to avoid circular import with OpeningExplorerView
+const OPENING_EXPLORER_VIEW_TYPE = "chess-journal-opening-explorer";
 
 const START_EPD = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -";
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -30,6 +61,7 @@ export class RepertoireView extends TextFileView {
 	private board: Chessboard | null = null;
 	private boardRafId: number | null = null;
 	private expandedTreePaths = new Set<string>();
+	private showEcoLabels = false;
 
 	constructor(leaf: WorkspaceLeaf, settings: ChessJournalSettings) {
 		super(leaf);
@@ -107,14 +139,74 @@ export class RepertoireView extends TextFileView {
 
 	/** True when a move at the given 1-based ply is the repertoire owner's move. */
 	private isMyPly(ply: number): boolean {
-		// ply 1 = white's first move, ply 2 = black's first move, etc.
 		const isWhiteMove = ply % 2 === 1;
 		return this.repertoire.color === "white" ? isWhiteMove : !isWhiteMove;
+	}
+
+	private getNodeAtPath(path: string[]): RepertoireNode | null {
+		let node = this.repertoire.root;
+		for (const san of path) {
+			const child = node.children.find(c => c.san === san);
+			if (!child) return null;
+			node = child;
+		}
+		return node;
+	}
+
+	private countSubtree(node: RepertoireNode): number {
+		return 1 + node.children.reduce((sum, c) => sum + this.countSubtree(c), 0);
+	}
+
+	private deleteNode(nodePath: string[]): void {
+		let parent = this.repertoire.root;
+		for (const san of nodePath.slice(0, -1)) {
+			const child = parent.children.find(c => c.san === san);
+			if (!child) return;
+			parent = child;
+		}
+		const sanToDelete = nodePath[nodePath.length - 1];
+		parent.children = parent.children.filter(c => c.san !== sanToDelete);
+
+		// If current position is within the deleted subtree, retreat to the parent
+		const deletedKey = nodePath.join(" ");
+		if (this.currentPath.join(" ").startsWith(deletedKey)) {
+			this.currentPath = nodePath.slice(0, -1);
+		}
+
+		this.requestSave();
+		this.render();
+	}
+
+	private confirmDelete(nodePath: string[]): void {
+		const node = this.getNodeAtPath(nodePath);
+		if (!node) return;
+		const count = this.countSubtree(node);
+		const san = nodePath[nodePath.length - 1];
+		new ConfirmModal(
+			this.app,
+			`Delete ${san}?`,
+			`This will delete ${count} position${count === 1 ? "" : "s"} (including all continuations). This cannot be undone.`,
+			() => this.deleteNode(nodePath),
+		).open();
 	}
 
 	private getEcoForEpd(epd: string): { eco: string; name: string } | null {
 		const match = ECO_DATA.find(e => e.epd === epd);
 		return match ? { eco: match.eco, name: match.name } : null;
+	}
+
+	// -------------------------------------------------------------------------
+	// Opening explorer sync
+	// -------------------------------------------------------------------------
+
+	private syncOpeningExplorer(): void {
+		const epd = this.chess.fen().split(" ").slice(0, 4).join(" ");
+		const leaves = this.app.workspace.getLeavesOfType(OPENING_EXPLORER_VIEW_TYPE);
+		if (leaves.length === 0) return;
+		const view = leaves[0].view as any;
+		if (typeof view.navigateToEpd === "function") {
+			view.navigateToEpd(epd);
+		}
 	}
 
 	// -------------------------------------------------------------------------
@@ -134,6 +226,8 @@ export class RepertoireView extends TextFileView {
 		} else {
 			this.renderTreeView(container);
 		}
+
+		this.syncOpeningExplorer();
 	}
 
 	private renderToolbar(container: HTMLElement): void {
@@ -151,7 +245,6 @@ export class RepertoireView extends TextFileView {
 		if (this.viewMode === "tree") treeBtn.classList.add("is-active");
 		treeBtn.addEventListener("click", () => { this.viewMode = "tree"; this.render(); });
 
-		// Colour badge (informational)
 		toolbar.createSpan({
 			cls: "chess-journal-rep-colour-badge",
 			text: this.repertoire.color === "white" ? "White" : "Black",
@@ -229,6 +322,14 @@ export class RepertoireView extends TextFileView {
 				this.currentPath = [...this.currentPath, child.san!];
 				this.render();
 			});
+			chip.addEventListener("contextmenu", (e: MouseEvent) => {
+				e.preventDefault();
+				const nodePath = [...this.currentPath, child.san!];
+				const menu = new Menu();
+				menu.addItem(item => item.setTitle("Delete move").setIcon("trash-2")
+					.onClick(() => this.confirmDelete(nodePath)));
+				menu.showAtMouseEvent(e);
+			});
 		}
 	}
 
@@ -239,7 +340,17 @@ export class RepertoireView extends TextFileView {
 		if (currentNode.noteFile) {
 			const abstractFile = this.app.vault.getAbstractFileByPath(currentNode.noteFile);
 			if (abstractFile instanceof TFile) {
-				this.renderNoteContent(noteSection, abstractFile);
+				const noteHeader = noteSection.createDiv({ cls: "chess-journal-rep-note-header" });
+	
+				const openBtn = noteHeader.createEl("button", { cls: "chess-journal-rep-note-open-btn" });
+				setIcon(openBtn, "external-link");
+				openBtn.setAttribute("aria-label", "Open note for editing");
+				openBtn.addEventListener("click", () => {
+					this.app.workspace.getLeaf(true).openFile(abstractFile);
+				});
+				// Dedicated content div so MarkdownRenderer appends below the header
+				const noteContent = noteSection.createDiv({ cls: "chess-journal-rep-note-content" });
+				this.renderNoteContent(noteContent, abstractFile);
 				return;
 			}
 		}
@@ -257,7 +368,7 @@ export class RepertoireView extends TextFileView {
 
 			try {
 				const noteFile = await createRepertoireNote(
-					this.app, folder, epd, repName,
+					this.app, folder, this.currentPath, epd, repName,
 					ecoMatch?.eco ?? null,
 					ecoMatch?.name ?? null,
 				);
@@ -273,7 +384,6 @@ export class RepertoireView extends TextFileView {
 
 	private async renderNoteContent(container: HTMLElement, noteFile: TFile): Promise<void> {
 		const content = await this.app.vault.read(noteFile);
-		if (!container.isConnected) return;
 		await MarkdownRenderer.render(this.app, content, container, noteFile.path, this);
 	}
 
@@ -323,7 +433,6 @@ export class RepertoireView extends TextFileView {
 						this.requestSave();
 					}
 					this.currentPath = [...this.currentPath, san];
-					// Re-render after the piece animation finishes
 					window.setTimeout(() => this.render(), 200);
 					return true;
 				}
@@ -346,10 +455,57 @@ export class RepertoireView extends TextFileView {
 	}
 
 	// -------------------------------------------------------------------------
-	// Tree view
+	// Tree view — linear segment rendering
+	//
+	// A "linear segment" is a maximal run of nodes where each has exactly one
+	// child. These are collapsed into a single row so that forcing sequences
+	// (or deep trunk lines like the Najdorf) don't require move-by-move
+	// expansion to reach the first branch point.
 	// -------------------------------------------------------------------------
 
+	/**
+	 * Ensure every ancestor segment of currentPath is expanded so the active
+	 * row is visible when the tree renders.
+	 */
+	private expandPathToCurrentInTree(): void {
+		if (this.currentPath.length === 0) return;
+		this.expandAlongPath(this.repertoire.root, []);
+	}
+
+	private expandAlongPath(node: RepertoireNode, pathSoFar: string[]): void {
+		const child = node.children.find(c => c.san === this.currentPath[pathSoFar.length]);
+		if (!child?.san) return;
+
+		// Collect the linear chain from this child
+		const chain: RepertoireNode[] = [child];
+		while (chain[chain.length - 1].children.length === 1) {
+			chain.push(chain[chain.length - 1].children[0]);
+		}
+
+		const pathToFirst = [...pathSoFar, child.san];
+		const pathToLast = chain.length === 1
+			? pathToFirst
+			: [...pathToFirst, ...chain.slice(1).map(n => n.san!)];
+		const pathKey = pathToLast.join(" ");
+		const currentKey = this.currentPath.join(" ");
+
+		// If currentPath goes deeper than this segment, expand it and recurse
+		if (currentKey.startsWith(pathKey + " ")) {
+			this.expandedTreePaths.add(pathKey);
+			this.expandAlongPath(chain[chain.length - 1], pathToLast);
+		}
+	}
+
 	private renderTreeView(container: HTMLElement): void {
+		const toolbar = container.createDiv({ cls: "chess-journal-rep-tree-toolbar" });
+		const ecoBtn = toolbar.createEl("button", { cls: "chess-journal-rep-tree-eco-btn" });
+		setIcon(ecoBtn, "tag");
+		ecoBtn.setAttribute("aria-label", "Show ECO labels");
+		if (this.showEcoLabels) ecoBtn.classList.add("is-active");
+		ecoBtn.addEventListener("click", () => { this.showEcoLabels = !this.showEcoLabels; this.render(); });
+
+		this.expandPathToCurrentInTree();
+
 		const tree = container.createDiv({ cls: "chess-journal-rep-tree" });
 
 		if (this.repertoire.root.children.length === 0) {
@@ -361,35 +517,57 @@ export class RepertoireView extends TextFileView {
 		}
 
 		for (const child of this.repertoire.root.children) {
-			if (child.san) this.renderTreeNode(tree, child, [child.san], 1);
+			if (child.san) {
+				this.renderLinearSegment(tree, child, [child.san], 1);
+			}
 		}
+
+		// Scroll active segment into view after layout
+		window.requestAnimationFrame(() => {
+			const active = tree.querySelector<HTMLElement>(".chess-journal-rep-tree-header.is-active");
+			active?.scrollIntoView({ block: "nearest" });
+		});
 	}
 
-	private renderTreeNode(
+	/**
+	 * Render a linear segment starting at firstNode.
+	 *
+	 * @param pathToFirst  Full SAN path from root to firstNode (inclusive).
+	 * @param startPly     1-based ply of firstNode (equals pathToFirst.length).
+	 */
+	private renderLinearSegment(
 		container: HTMLElement,
-		node: RepertoireNode,
-		path: string[],
-		ply: number,
+		firstNode: RepertoireNode,
+		pathToFirst: string[],
+		startPly: number,
 	): void {
-		if (!node.san) return;
+		// Collect the linear chain: keep going while there is exactly one child
+		const chain: RepertoireNode[] = [firstNode];
+		while (chain[chain.length - 1].children.length === 1) {
+			chain.push(chain[chain.length - 1].children[0]);
+		}
 
-		const pathKey = path.join(" ");
-		const isExpanded = this.expandedTreePaths.has(pathKey);
-		const hasChildren = node.children.length > 0;
-		const isMine = this.isMyPly(ply);
+		const lastNode = chain[chain.length - 1];
+		const pathToLast = chain.length === 1
+			? pathToFirst
+			: [...pathToFirst, ...chain.slice(1).map(n => n.san!)];
+		const pathKey = pathToLast.join(" ");
 
-		const moveNum = Math.ceil(ply / 2);
-		const moveLabel = ply % 2 === 1
-			? `${moveNum}. ${node.san}`
-			: `${moveNum}...${node.san}`;
+		const isLeaf = lastNode.children.length === 0;
+		const isExpanded = !isLeaf && this.expandedTreePaths.has(pathKey);
+
+		// A segment is "active" if the current path falls anywhere within it
+		const currentKey = this.currentPath.join(" ");
+		const isActive = this.currentPath.length >= pathToFirst.length &&
+			this.currentPath.length <= pathToLast.length &&
+			pathToLast.slice(0, this.currentPath.length).join(" ") === currentKey;
 
 		const nodeEl = container.createDiv({ cls: "chess-journal-rep-tree-node" });
-		const header = nodeEl.createDiv({
-			cls: "chess-journal-rep-tree-header" + (isMine ? " is-mine" : ""),
-		});
+		const header = nodeEl.createDiv({ cls: "chess-journal-rep-tree-header" + (isActive ? " is-active" : "") });
 
+		// Expand/collapse toggle (only when there are branches)
 		const toggleEl = header.createSpan({ cls: "chess-journal-explorer-toggle" });
-		if (hasChildren) {
+		if (!isLeaf) {
 			setIcon(toggleEl, isExpanded ? "chevron-down" : "chevron-right");
 			toggleEl.addEventListener("click", (e) => {
 				e.stopPropagation();
@@ -402,24 +580,71 @@ export class RepertoireView extends TextFileView {
 			});
 		}
 
-		const sanEl = header.createSpan({ cls: "chess-journal-rep-tree-san", text: moveLabel });
-		sanEl.addEventListener("click", () => {
-			this.currentPath = path;
-			this.viewMode = "board";
-			this.render();
+		// Move sequence
+		const movesEl = header.createSpan({ cls: "chess-journal-rep-tree-moves" });
+		chain.forEach((node, i) => {
+			const ply = startPly + i;
+			const moveNum = Math.ceil(ply / 2);
+			const isWhite = ply % 2 === 1;
+
+			if (i > 0) movesEl.createSpan({ text: " " });
+			const moveEl = movesEl.createSpan({ cls: "chess-journal-rep-tree-move" });
+			if (isWhite) {
+				moveEl.createSpan({ cls: "chess-journal-rep-tree-move-num", text: `${moveNum}.` });
+				moveEl.createSpan({ text: ` ${node.san}` });
+			} else if (i === 0) {
+				// First move in chain and it's black's — show move number with ellipsis
+				moveEl.createSpan({ cls: "chess-journal-rep-tree-move-num", text: `${moveNum}...` });
+				moveEl.createSpan({ text: node.san! });
+			} else {
+				moveEl.setText(node.san!);
+			}
 		});
 
-		if (node.noteFile) {
+		// ECO label for the last node in the chain
+		if (this.showEcoLabels) {
+			const eco = this.getEcoForEpd(lastNode.epd);
+			if (eco) {
+				const shortName = eco.name.includes(":")
+				? eco.name.split(":").slice(1).join(":").trim()
+				: eco.name;
+			header.createSpan({ cls: "chess-journal-rep-tree-eco", text: `${shortName} (${eco.eco})` });
+			}
+		}
+
+		// Note indicator if any node in the chain has a linked note
+		if (chain.some(n => n.noteFile && this.app.vault.getAbstractFileByPath(n.noteFile) instanceof TFile)) {
 			const noteIcon = header.createSpan({ cls: "chess-journal-rep-tree-note-icon" });
 			setIcon(noteIcon, "file-text");
 		}
 
-		if (!isExpanded || !hasChildren) return;
+		// Right-click to delete
+		header.addEventListener("contextmenu", (e: MouseEvent) => {
+			e.preventDefault();
+			const menu = new Menu();
+			menu.addItem(item => item.setTitle("Delete move").setIcon("trash-2")
+				.onClick(() => this.confirmDelete(pathToFirst)));
+			menu.showAtMouseEvent(e);
+		});
+
+		// Clicking the moves area navigates to the end of the chain in board view
+		movesEl.addEventListener("click", () => {
+			this.currentPath = pathToLast;
+			this.viewMode = "board";
+			this.render();
+		});
+
+		if (isLeaf || !isExpanded) return;
 
 		const childrenEl = nodeEl.createDiv({ cls: "chess-journal-rep-tree-children" });
-		for (const child of node.children) {
+		for (const child of lastNode.children) {
 			if (child.san) {
-				this.renderTreeNode(childrenEl, child, [...path, child.san], ply + 1);
+				this.renderLinearSegment(
+					childrenEl,
+					child,
+					[...pathToLast, child.san],
+					startPly + chain.length,
+				);
 			}
 		}
 	}

@@ -874,6 +874,10 @@
 	background: var(--background-modifier-hover);
 }
 
+.chess-journal-rep-tree-header.is-active {
+	background: var(--background-modifier-active-hover);
+}
+
 .chess-journal-rep-tree-header.is-mine .chess-journal-rep-tree-san {
 	color: var(--interactive-accent);
 	font-weight: 600;
@@ -898,4 +902,96 @@
 	margin-left: 0.75em;
 	padding-left: 0.75em;
 	border-left: 2px solid var(--background-modifier-border);
+}
+
+/* Note header (title + open button) */
+.chess-journal-rep-note-header {
+	display: flex;
+	align-items: center;
+	gap: 0.4em;
+	margin-bottom: 0.5em;
+}
+
+.chess-journal-rep-note-title {
+	font-weight: 600;
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+	flex-grow: 1;
+}
+
+.chess-journal-rep-note-open-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.6em;
+	height: 1.6em;
+	padding: 0;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	background: transparent;
+	color: var(--text-muted);
+	flex-shrink: 0;
+}
+
+.chess-journal-rep-note-open-btn:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+/* Tree move sequence spans */
+.chess-journal-rep-tree-moves {
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-small);
+	cursor: pointer;
+	flex-grow: 1;
+}
+
+.chess-journal-rep-tree-moves:hover {
+	text-decoration: underline;
+}
+
+.chess-journal-rep-tree-move {
+	color: var(--text-muted);
+}
+
+.chess-journal-rep-tree-move-num {
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.chess-journal-rep-tree-toolbar {
+	display: flex;
+	justify-content: flex-end;
+	padding: 0.2em 0.4em;
+}
+
+.chess-journal-rep-tree-eco-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.6em;
+	height: 1.6em;
+	padding: 0;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	background: transparent;
+	color: var(--text-faint);
+}
+
+.chess-journal-rep-tree-eco-btn:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-muted);
+}
+
+.chess-journal-rep-tree-eco-btn.is-active {
+	color: var(--interactive-accent);
+}
+
+.chess-journal-rep-tree-eco {
+	font-family: var(--font-monospace);
+	font-size: 0.75em;
+	color: var(--text-faint);
+	flex-shrink: 0;
 }
