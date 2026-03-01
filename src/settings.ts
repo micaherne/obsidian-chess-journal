@@ -60,6 +60,7 @@ export interface ChessJournalSettings {
 	openingsFolder: string;
 	repertoireNotesFolder: string;
 	hideClock: boolean;
+	lichessApiKey: string;
 }
 
 export const DEFAULT_SETTINGS: ChessJournalSettings = {
@@ -70,6 +71,7 @@ export const DEFAULT_SETTINGS: ChessJournalSettings = {
 	openingsFolder: "",
 	repertoireNotesFolder: "",
 	hideClock: true,
+	lichessApiKey: "",
 };
 
 export interface ChessJournalPluginInterface {
@@ -202,6 +204,21 @@ export class ChessJournalSettingTab extends PluginSettingTab {
 
 		containerEl.createEl("h3", { text: "Chess.com" });
 		this.renderChessComSection(containerEl);
+
+		containerEl.createEl("h3", { text: "Lichess" });
+
+		new Setting(containerEl)
+			.setName("API key")
+			.setDesc("Optional personal API token from lichess.org/account/oauth/token. Increases rate limits for the opening explorer database tab.")
+			.addText(text => {
+				text.inputEl.type = "password";
+				text.setPlaceholder("lio_...")
+					.setValue(this.plugin.settings.lichessApiKey)
+					.onChange(async (value: string) => {
+						this.plugin.settings.lichessApiKey = value.trim();
+						await this.plugin.saveSettings();
+					});
+			});
 	}
 
 	private renderSourcesList(container: HTMLElement): void {

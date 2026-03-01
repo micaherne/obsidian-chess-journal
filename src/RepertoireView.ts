@@ -16,6 +16,8 @@ import { ChessJournalSettings } from "./settings";
 import { RepertoireData, RepertoireNode } from "./RepertoireTypes";
 import { createRepertoireNote } from "./createRepertoireNote";
 import { ECO_DATA } from "./eco-data";
+import { LichessMastersProvider } from "./LichessMastersProvider";
+import { OpeningExplorerResult, OpeningExplorerMove } from "./OpeningExplorerProvider";
 
 class ConfirmModal extends Modal {
 	private title: string;
@@ -65,9 +67,19 @@ export class RepertoireView extends TextFileView {
 	private noteIndex = new Map<string, TFile>();
 	private pendingNote: { epd: string; file: TFile } | null = null;
 
+	// Masters data
+	private mastersResult: OpeningExplorerResult | null = null;
+	private mastersLoading = false;
+	private mastersError: string | null = null;
+	private mastersFetchId = 0;
+	private mastersFetchTimeout: number | null = null;
+	private mastersForPath: string | null = null;
+	private readonly mastersProvider: LichessMastersProvider;
+
 	constructor(leaf: WorkspaceLeaf, settings: ChessJournalSettings) {
 		super(leaf);
 		this.settings = settings;
+		this.mastersProvider = new LichessMastersProvider(settings);
 	}
 
 	getViewType(): string { return VIEW_TYPE_REPERTOIRE; }
@@ -102,6 +114,8 @@ export class RepertoireView extends TextFileView {
 	}
 
 	async onClose(): Promise<void> {
+		if (this.mastersFetchTimeout !== null) window.clearTimeout(this.mastersFetchTimeout);
+		this.mastersFetchId++;
 		this.destroyBoard();
 	}
 
@@ -281,6 +295,7 @@ export class RepertoireView extends TextFileView {
 		const boardWrap = view.createDiv({ cls: "chess-journal-rep-board-wrap" });
 		boardWrap.createDiv({ cls: "chess-journal-rep-board" });
 		this.renderContinuations(view);
+		this.renderMastersSection(view);
 		this.renderNoteSection(view);
 
 		this.boardRafId = window.requestAnimationFrame(() => {
@@ -351,6 +366,157 @@ export class RepertoireView extends TextFileView {
 				menu.showAtMouseEvent(e);
 			});
 		}
+	}
+
+	// -------------------------------------------------------------------------
+	// Masters section
+	// -------------------------------------------------------------------------
+
+	private cancelMastersFetch(): void {
+		this.mastersFetchId++;
+		if (this.mastersFetchTimeout !== null) {
+			window.clearTimeout(this.mastersFetchTimeout);
+			this.mastersFetchTimeout = null;
+		}
+		this.mastersResult = null;
+		this.mastersLoading = false;
+		this.mastersError = null;
+	}
+
+	private scheduleMastersFetch(): void {
+		if (this.mastersFetchTimeout !== null) window.clearTimeout(this.mastersFetchTimeout);
+		this.mastersFetchTimeout = window.setTimeout(() => {
+			this.mastersFetchTimeout = null;
+			void this.fetchMasters();
+		}, 300);
+	}
+
+	private async fetchMasters(): Promise<void> {
+		const fetchId = ++this.mastersFetchId;
+		this.mastersLoading = true;
+		this.mastersError = null;
+		this.render();
+
+		const fen = this.chess.fen();
+
+		for (let attempt = 0; ; attempt++) {
+			if (fetchId !== this.mastersFetchId) return;
+
+			try {
+				const result = await this.mastersProvider.getMoves(fen);
+				if (fetchId !== this.mastersFetchId) return;
+				this.mastersResult = result;
+				break;
+			} catch (e: any) {
+				if (fetchId !== this.mastersFetchId) return;
+				if (e?.status === 429) {
+					const delay = Math.min(1000 * Math.pow(2, attempt), 30000);
+					await new Promise<void>(resolve => window.setTimeout(resolve, delay));
+					continue;
+				}
+				this.mastersError = e instanceof Error ? e.message : String(e);
+				break;
+			}
+		}
+
+		if (fetchId !== this.mastersFetchId) return;
+		this.mastersLoading = false;
+		this.render();
+	}
+
+	private renderMastersSection(container: HTMLElement): void {
+		// Detect position change and trigger a new fetch if needed
+		const pathKey = this.currentPath.join("\0");
+		if (pathKey !== this.mastersForPath) {
+			this.cancelMastersFetch();
+			this.mastersForPath = pathKey;
+		}
+		if (!this.mastersResult && !this.mastersLoading && !this.mastersError) {
+			this.scheduleMastersFetch();
+		}
+
+		const section = container.createDiv({ cls: "chess-journal-rep-masters" });
+
+		const header = section.createDiv({ cls: "chess-journal-rep-masters-header" });
+		header.createSpan({ cls: "chess-journal-rep-section-label", text: "Masters" });
+
+		if (this.mastersLoading) {
+			section.createDiv({ cls: "chess-journal-rep-masters-status", text: "Loading…" });
+			return;
+		}
+
+		if (this.mastersError) {
+			section.createDiv({ cls: "chess-journal-rep-masters-status chess-journal-rep-masters-error", text: this.mastersError });
+			return;
+		}
+
+		if (!this.mastersResult || this.mastersResult.moves.length === 0) {
+			section.createDiv({ cls: "chess-journal-rep-masters-status", text: "No games found." });
+			return;
+		}
+
+		const total = this.mastersResult.white + this.mastersResult.draws + this.mastersResult.black;
+		header.createSpan({ cls: "chess-journal-rep-masters-total", text: `${total.toLocaleString()} games` });
+
+		const table = section.createEl("table", { cls: "chess-journal-rep-masters-table" });
+		const tbody = table.createEl("tbody");
+
+		for (const move of this.mastersResult.moves) {
+			this.renderMastersRow(tbody, move);
+		}
+	}
+
+	private renderMastersRow(tbody: HTMLElement, move: OpeningExplorerMove): void {
+		const row = tbody.createEl("tr", { cls: "chess-journal-rep-masters-row" });
+		row.addEventListener("click", () => this.playMastersMove(move.san));
+
+		row.createEl("td", { cls: "chess-journal-rep-masters-san", text: move.san });
+
+		const moveTotal = move.white + move.draws + move.black;
+		row.createEl("td", { cls: "chess-journal-rep-masters-games", text: moveTotal.toLocaleString() });
+
+		const barTd = row.createEl("td");
+		const bar = barTd.createDiv({ cls: "chess-journal-wdl-bar" });
+		if (moveTotal > 0) {
+			const wPct = (move.white / moveTotal) * 100;
+			const dPct = (move.draws / moveTotal) * 100;
+			const bPct = (move.black / moveTotal) * 100;
+			if (wPct > 0) {
+				const seg = bar.createDiv({ cls: "chess-journal-wdl-bar-white" });
+				seg.style.width = `${wPct.toFixed(1)}%`;
+				seg.title = `White: ${wPct.toFixed(1)}%`;
+			}
+			if (dPct > 0) {
+				const seg = bar.createDiv({ cls: "chess-journal-wdl-bar-draw" });
+				seg.style.width = `${dPct.toFixed(1)}%`;
+				seg.title = `Draw: ${dPct.toFixed(1)}%`;
+			}
+			if (bPct > 0) {
+				const seg = bar.createDiv({ cls: "chess-journal-wdl-bar-black" });
+				seg.style.width = `${bPct.toFixed(1)}%`;
+				seg.title = `Black: ${bPct.toFixed(1)}%`;
+			}
+		}
+
+		if (move.averageRating) {
+			row.createEl("td", { cls: "chess-journal-rep-masters-rating", text: String(move.averageRating) });
+		} else {
+			row.createEl("td");
+		}
+	}
+
+	private playMastersMove(san: string): void {
+		const move = this.chess.move(san);
+		if (!move) return;
+		const currentNode = this.getCurrentNode();
+		const existing = currentNode.children.find(c => c.san === san);
+		if (!existing) {
+			const epd = this.chess.fen().split(" ").slice(0, 4).join(" ");
+			currentNode.children.push({ san, epd, children: [] });
+			this.requestSave();
+		}
+		this.currentPath = [...this.currentPath, san];
+		this.render();
 	}
 
 	private renderNoteSection(container: HTMLElement): void {

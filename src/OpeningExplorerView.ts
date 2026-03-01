@@ -264,6 +264,7 @@ export class OpeningExplorerView extends ItemView {
 			this.viewMode = "moves";
 			this.render();
 		});
+
 	}
 
 	// ---------------------------------------------------------------------------
